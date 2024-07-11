@@ -3,10 +3,13 @@
 #include <string.h>
 #include <unistd.h>
 #include <getopt.h>
+#include <pthread.h>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+
+#include "agent_handler.h"
 
 #define IP_SIZE 16
 #define LISTEN_BACKLOG 3
@@ -16,9 +19,11 @@ int connect_from_implant(int port){
     int sockfd, new_socket;
     int opt = 1;
     struct sockaddr_in addr;
-    char* buffer;
-    char* message = "Listener Alive\n";
+    char *buffer;
+    char *message = "Listener Alive\n";
     socklen_t addr_len = sizeof(addr);
+    pthread_t thread_id;
+    struct agent_connection *agent;
 
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
         printf("Socket failed\n");
@@ -44,23 +49,32 @@ int connect_from_implant(int port){
         return -1;
     }
 
-    if ((new_socket = accept(sockfd, (struct sockaddr*)&addr, &addr_len)) < 0){
-        printf("accept failed\n");
-        return -1;
+    while(1){
+        if ((new_socket = accept(sockfd, (struct sockaddr*)&addr, &addr_len)) < 0){
+            printf("accept failed\n");
+            return -1;
+        }
+
+        agent = malloc(sizeof(agent));
+        agent->sock_id = new_socket;
+        agent->ip_addr = addr.sin_addr.s_addr;
+        agent->port = addr.sin_port;
+
+        pthread_create(&thread_id, NULL, agent_handler, (void*)agent);
     }
 
-    buffer = malloc(BUFFER_SIZE);
-    memset(buffer, 0, BUFFER_SIZE);
+    // buffer = malloc(BUFFER_SIZE);
+    // memset(buffer, 0, BUFFER_SIZE);
 
-    while(read(new_socket, buffer, BUFFER_SIZE - 1)){
-        printf("%s", buffer);
-        send(new_socket, message, strlen(message), 0);
-        sleep(1);
-    }
+    // while(read(new_socket, buffer, BUFFER_SIZE - 1)){
+    //     printf("%s", buffer);
+    //     send(new_socket, message, strlen(message), 0);
+    //     sleep(1);
+    // }
 
-    free(buffer);
-    close(new_socket);
-    close(sockfd);
+    // free(buffer);
+    // close(new_socket);
+    // close(sockfd);
     return 0;
 }
 int main(int argc, char *argv[]){
