@@ -7,3 +7,13 @@ struct agent_receive{
 };
 
 #endif
+
+#ifndef AGENT_QUEUE
+#define AGENT_QUEUE
+
+struct agent_queue{
+	int agent_fd;
+	char* message;
+};
+
+#endif

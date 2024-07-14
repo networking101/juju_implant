@@ -13,7 +13,7 @@
 #include "agent_transmit.h"
 #include "console.h"
 
-#define FDSIZE			5
+#define FDSIZE			10
 #define LISTEN_BACKLOG	3
 #define BUFFER_SIZE		256
 #define AGENT_TIMEOUT	60
@@ -56,8 +56,8 @@ int start_sockets(struct agent_receive *ARS, int port){
         }
         printf("DEBUG Agent connected %d\n", new_socket);
         
-        if (*(ARS->fd_count) == FDSIZE){
-			printf("too many connection\n");
+        if (new_socket >= FDSIZE){
+			printf("too many connections\n");
 			close(new_socket);
 			continue;
 		}

