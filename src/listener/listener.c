@@ -10,15 +10,29 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#include "agent_transmit.h"
+#include "globals.h"
+#include "listener_comms.h"
 #include "console.h"
+#include "queue.h"
+#include "message_handler.h"
 
 #define FDSIZE			10
 #define LISTEN_BACKLOG	3
 #define BUFFER_SIZE		256
 #define AGENT_TIMEOUT	60
 
-int start_sockets(struct agent_receive *ARS, int port){
+// Globals
+// Socket Poll Structure
+struct implant_poll *poll_struct;
+pthread_mutex_t poll_lock;
+// Receive Queue
+struct Queue* receive_queue;
+pthread_mutex_t receive_queue_lock;
+// Send Queue
+struct Queue* send_queue;
+pthread_mutex_t send_queue_lock;
+
+int start_sockets(int port){
     int sockfd, new_socket;
     int opt = 1;
     struct sockaddr_in addr;
@@ -62,9 +76,7 @@ int start_sockets(struct agent_receive *ARS, int port){
 			continue;
 		}
         
-        ARS->pfds[*(ARS->fd_count)].fd = new_socket;
-        ARS->pfds[*(ARS->fd_count)].events = POLLIN;
-        *(ARS->fd_count) = *(ARS->fd_count) + 1;
+        poll_add(new_socket);
     }
     
     close(sockfd);
@@ -73,12 +85,12 @@ int start_sockets(struct agent_receive *ARS, int port){
 int main(int argc, char *argv[]){
     int opt;
     int port = 55555;
-    pthread_t agent_receive_tid, agent_send_tid, console_tid;
+    pthread_t agent_receive_tid, agent_send_tid, console_tid, message_handler_tid;
     struct pollfd *pfds;
     int fd_count = 0;
     int fd_size = FDSIZE;
-    struct agent_receive *ARS;
 
+    poll_struct = malloc(sizeof(poll_struct));
     pfds = malloc(sizeof *pfds * fd_size);
     
     while((opt = getopt(argc, argv, "p:h")) != -1){
@@ -98,16 +110,25 @@ int main(int argc, char *argv[]){
         }
     }
     
-    ARS->fd_count = &fd_count;
-    ARS->pfds = pfds;
+    poll_struct->fd_count = &fd_count;
+    poll_struct->pfds = pfds;
 
     // Start agent receive thread
-    pthread_create(&agent_receive_tid, NULL, agent_receive, ARS);
+    pthread_create(&agent_receive_tid, NULL, agent_receive, NULL);
     // Start agent send thread
-    pthread_create(&agent_send_tid, NULL, agent_send, ARS);
-    // Start console
-    pthread_create(&console_tid, NULL, console, ARS);
+    pthread_create(&agent_send_tid, NULL, agent_send, NULL);
+    // Start console thread
+    pthread_create(&console_tid, NULL, console, NULL);
+    // Start message handler thread
+    pthread_create(&message_handler_tid, NULL, handle_message, NULL);
+    
+    // Create receive queue
+    receive_queue = createQueue(1000);
+    pthread_mutex_init(&receive_queue_lock, NULL);
+    // Create send queue
+    send_queue = createQueue(1000);
+    pthread_mutex_init(&send_queue_lock, NULL);
 
-    start_sockets(ARS, port);
+    start_sockets(port);
     return 0;
 }

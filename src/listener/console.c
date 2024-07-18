@@ -5,11 +5,18 @@
 
 #define BUFFERSIZE 10
 
-void *console(void *vargp){
+// Global variables
+extern struct implant_poll *poll_struct;
+
+int agent_console(){
 	
-	struct agent_receive *ARS = (struct agent_receive *)vargp;
-	int *fd_count = ARS->fd_count;
-	struct pollfd *pfds = ARS->pfds;
+	return 0;
+}
+
+
+void *console(void *vargp){
+	int *fd_count = poll_struct->fd_count;
+	struct pollfd *pfds = poll_struct->pfds;
 	
 	char* menu = "Welcome to the implant listener.\n"
 				 "Provide an option.\n"
