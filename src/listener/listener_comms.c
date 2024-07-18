@@ -68,14 +68,22 @@ void *agent_receive(void *vargp){
 
 void *agent_send(void *vargp){
 	int nbytes;
-	char buf[64];
+	char* buf;
+	struct Message* message;
 	
 	int *fd_count = poll_struct->fd_count;
 	struct pollfd *pfds = poll_struct->pfds;
 	
 	for(;;){
-//		printf("Size of fd_count %d\n", *fd_count);
-//		sleep(1);
+		pthread_mutex_lock(&send_queue_lock);
+		if (message = dequeue(send_queue)){
+			if ((nbytes = send(message->sockfd, message->buffer, BUFFERSIZE, 0)) < 0){
+				printf("send failed\n");
+			}
+			free(message->buffer);
+			free(message);
+		}
+		pthread_mutex_unlock(&send_queue_lock);
 	}
     return 0;
 }

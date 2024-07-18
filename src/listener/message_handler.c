@@ -22,7 +22,8 @@ void handle_message(void*){
 		message = dequeue(receive_queue);
 		pthread_mutex_unlock(&receive_queue_lock);
 		
-		printf("DEBUG RECEIVED MESSAGE: %d, %s\n", message->sockfd, message->buffer);
+		//printf("DEBUG RECEIVED MESSAGE: %d, %s\n", message->sockfd, message->buffer);
+		free(message->buffer);
 		free(message);
 	}
 	return;
