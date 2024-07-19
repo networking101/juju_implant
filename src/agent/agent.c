@@ -4,7 +4,6 @@
 #include <unistd.h>
 #include <errno.h>
 #include <pthread.h>
-#include <poll.h>
 
 #include <sys/socket.h>
 #include <netinet/in.h>

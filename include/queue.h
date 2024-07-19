@@ -1,4 +1,3 @@
-
 #ifndef QUEUE_STRUCTURE
 #define QUEUE_STRUCTURE
 

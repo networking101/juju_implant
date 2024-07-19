@@ -3,8 +3,7 @@
 #include <poll.h>
 #include <sys/socket.h>
 
-#include "implant.h"
-#include "globals.h"
+#include "base.h"
 
 // Global variables
 extern struct implant_poll *poll_struct;

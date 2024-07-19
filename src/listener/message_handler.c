@@ -5,13 +5,15 @@
 
 #include "queue.h"
 #include "implant.h"
+#include "base.h"
+#include "message_handler.h"
 
 extern struct Queue* receive_queue;
 extern pthread_mutex_t receive_queue_lock;
 extern struct Queue* send_queue;
 extern pthread_mutex_t send_queue_lock;
 
-void handle_message(void*){
+void *handle_message(void*){
 	struct Message* message;
 	
 	for (;;){
@@ -26,7 +28,7 @@ void handle_message(void*){
 		free(message->buffer);
 		free(message);
 	}
-	return;
+	return 0;
 }
 
 int send_message(){

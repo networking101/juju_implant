@@ -7,10 +7,10 @@
 
 #include <sys/socket.h>
 
-#include "listener_comms.h"
-#include "globals.h"
 #include "queue.h"
 #include "implant.h"
+#include "base.h"
+#include "listener_comms.h"
 
 #define BUFFERSIZE 256
 

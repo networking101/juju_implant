@@ -10,16 +10,18 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#include "globals.h"
+#include "queue.h"
+#include "base.h"
 #include "listener_comms.h"
 #include "console.h"
-#include "queue.h"
 #include "message_handler.h"
 
 #define FDSIZE			10
 #define LISTEN_BACKLOG	3
 #define BUFFER_SIZE		256
 #define AGENT_TIMEOUT	60
+#define DEFAULT_PORT	55555
+#define QUEUE_SIZE		10000
 
 // Globals
 // Socket Poll Structure
@@ -84,14 +86,14 @@ int start_sockets(int port){
 }
 int main(int argc, char *argv[]){
     int opt;
-    int port = 55555;
+    int port = DEFAULT_PORT;
     pthread_t agent_receive_tid, agent_send_tid, console_tid, message_handler_tid;
     struct pollfd *pfds;
     int fd_count = 0;
     int fd_size = FDSIZE;
 
     poll_struct = malloc(sizeof(poll_struct));
-    pfds = malloc(sizeof *pfds * fd_size);
+    pfds = malloc(sizeof(pfds) * fd_size);
     
     while((opt = getopt(argc, argv, "p:h")) != -1){
         switch(opt){
@@ -123,10 +125,10 @@ int main(int argc, char *argv[]){
     pthread_create(&message_handler_tid, NULL, handle_message, NULL);
     
     // Create receive queue
-    receive_queue = createQueue(1000);
+    receive_queue = createQueue(QUEUE_SIZE);
     pthread_mutex_init(&receive_queue_lock, NULL);
     // Create send queue
-    send_queue = createQueue(1000);
+    send_queue = createQueue(QUEUE_SIZE);
     pthread_mutex_init(&send_queue_lock, NULL);
 
     start_sockets(port);
