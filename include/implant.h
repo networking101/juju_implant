@@ -2,8 +2,11 @@
 #define MESSAGE_STRUCTURE
 
 struct Message{
-	int sockfd;
+	int id;
+	uint size;
 	char* buffer;
 };
+
+#define BUFFERSIZE 4096
 
 #endif

