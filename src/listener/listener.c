@@ -1,3 +1,13 @@
+/*
+listener.c
+
+This is the main file for the listener. It will do the following:
+* spawn threads
+* create the listening socket
+* listen for new agents to connect
+
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -5,34 +15,37 @@
 #include <getopt.h>
 #include <pthread.h>
 #include <poll.h>
+#include <time.h>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#include "implant.h"
 #include "queue.h"
 #include "base.h"
 #include "listener_comms.h"
 #include "console.h"
 #include "message_handler.h"
 
-#define FDSIZE			10
+#define FDSIZE			100
 #define LISTEN_BACKLOG	3
 #define BUFFER_SIZE		256
 #define AGENT_TIMEOUT	60
 #define DEFAULT_PORT	55555
-#define QUEUE_SIZE		10000
 
 // Globals
 // Socket Poll Structure
-struct implant_poll *poll_struct;
+implant_poll *poll_struct;
 pthread_mutex_t poll_lock;
 // Receive Queue
-struct Queue* receive_queue;
+Queue* receive_queue;
 pthread_mutex_t receive_queue_lock;
 // Send Queue
-struct Queue* send_queue;
+Queue* send_queue;
 pthread_mutex_t send_queue_lock;
+// Agent array
+Agent* agents[FDSIZE] = {}; 
 
 int start_sockets(int port){
     int sockfd, new_socket;
@@ -79,6 +92,10 @@ int start_sockets(int port){
 		}
         
         poll_add(new_socket);
+        agents[new_socket] = malloc(sizeof(Agent));
+        memset(agents[new_socket], 0, sizeof(Agent));
+        agents[new_socket]->alive = (uint)time(NULL);
+        agents[new_socket]->last_fragment_index = -1;
     }
     
     close(sockfd);
@@ -115,21 +132,21 @@ int main(int argc, char *argv[]){
     poll_struct->fd_count = &fd_count;
     poll_struct->pfds = pfds;
 
-    // Start agent receive thread
-    pthread_create(&agent_receive_tid, NULL, agent_receive, NULL);
-    // Start agent send thread
-    pthread_create(&agent_send_tid, NULL, agent_send, NULL);
-    // Start console thread
-    pthread_create(&console_tid, NULL, console, NULL);
-    // Start message handler thread
-    pthread_create(&message_handler_tid, NULL, handle_message, NULL);
-    
     // Create receive queue
     receive_queue = createQueue(QUEUE_SIZE);
     pthread_mutex_init(&receive_queue_lock, NULL);
     // Create send queue
     send_queue = createQueue(QUEUE_SIZE);
     pthread_mutex_init(&send_queue_lock, NULL);
+
+    // Start agent receive thread
+    pthread_create(&agent_receive_tid, NULL, agent_receive, NULL);
+    // Start agent send thread
+//    pthread_create(&agent_send_tid, NULL, agent_send, NULL);
+    // Start console thread
+//    pthread_create(&console_tid, NULL, console, NULL);
+    // Start message handler thread
+    pthread_create(&message_handler_tid, NULL, handle_message, NULL);
 
     start_sockets(port);
     return 0;

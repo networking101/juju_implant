@@ -1,11 +1,26 @@
+#include "implant.h"
+
+#define QUEUE_SIZE		10000
+
 #ifndef QUEUE_STRUCTURE
 #define QUEUE_STRUCTURE
 
-struct Queue{
+typedef struct Queue{
 	int front, rear, size;
 	unsigned capacity;
 	void** array;
-};
+} Queue;
+
+#endif
+
+#ifndef QUEUE_MESSAGE_STRUCTURE
+#define QUEUE_MESSAGE_STRUCTURE
+
+typedef struct Queue_Message{
+	int32_t id;
+	int32_t fragment_size;
+	Fragment* fragment;
+} Queue_Message;
 
 #endif
 

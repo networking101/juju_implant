@@ -3,8 +3,8 @@
 
 #include "queue.h"
 
-struct Queue* createQueue(unsigned capacity){
-	struct Queue* queue = (struct Queue*)malloc(sizeof(struct Queue));
+Queue* createQueue(unsigned capacity){
+	Queue* queue = (Queue*)malloc(sizeof(Queue));
 	queue->capacity = capacity;
 	queue->front = queue->size = 0;
 	queue->rear = capacity - 1;
@@ -12,15 +12,15 @@ struct Queue* createQueue(unsigned capacity){
 	return queue;
 }
 
-int isFull(struct Queue* queue){
+int isFull(Queue* queue){
 	return (queue->size == queue->capacity);
 }
 
-int isEmpty(struct Queue* queue){
+int isEmpty(Queue* queue){
 	return(queue->size == 0);
 }
 
-void enqueue(struct Queue* queue, void* item){
+void enqueue(Queue* queue, void* item){
 	if (isFull(queue))
 		return;
 	queue->rear = (queue->rear + 1) % queue->capacity;
@@ -29,7 +29,7 @@ void enqueue(struct Queue* queue, void* item){
 //	printf("DEBUG %p enqueued to queue\n", item);
 }
 
-void* dequeue(struct Queue* queue){
+void* dequeue(Queue* queue){
 	if (isEmpty(queue))
 		return NULL;
 	void* item = queue->array[queue->front];
@@ -38,13 +38,13 @@ void* dequeue(struct Queue* queue){
 	return item;
 }
 
-void* front(struct Queue* queue){
+void* front(Queue* queue){
 	if(isEmpty(queue))
 		return NULL;
 	return queue->array[queue->front];
 }
 
-void* rear(struct Queue* queue){
+void* rear(Queue* queue){
 	if (isEmpty(queue))
 		return NULL;
 	return queue->array[queue->rear];

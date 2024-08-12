@@ -1,3 +1,3 @@
 void* handle_message(void*);
 
-int send_message();
+int prepare_message();
