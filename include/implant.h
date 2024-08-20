@@ -1,17 +1,31 @@
-#define BUFFERSIZE 4096
+#ifndef _IMPLANT_H
+#define _IMPLANT_H
+
+#define BUFFERSIZE		4096
+#define FRAGMENTSIZE	BUFFERSIZE + 8
 
 #define TYPE_ALIVE		0
 #define TYPE_COMMAND	1
 #define TYPE_PUT_FILE	2
 #define TYPE_GET_FILE	3
 
-#ifndef FRAGMENT_STRUCTURE
-#define FRAGMENT_STRUCTURE
+#define RET_ERROR	-1
+#define RET_OK		0
+
+typedef struct First_Payload{
+	int32_t total_size;
+	char actual_payload[BUFFERSIZE - 4];
+} First_Payload;
 
 typedef struct Fragment{
 	int32_t type;						// type of message (0 for alive, 1 for command)
 	int32_t index;						// index of fragment in complete message
-	char payload[BUFFERSIZE];			// payload
+	union {
+		char next_payload[BUFFERSIZE];			// payload
+		First_Payload first_payload;
+	};
 } Fragment;
 
-#endif
+
+
+#endif /* _IMPLANT_H */

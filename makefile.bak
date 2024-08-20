@@ -1,0 +1,33 @@
+CC				:= gcc
+
+INC				:=-Iinclude
+LISTENER_INC	:=$(INC) -Iinclude/listener
+AGENT_INC		:=$(INC) -Iinclude/agent
+TEST_INC		:=$(INC) $(LISTENER_INC) $(AGENT_INC) -Itests/include/agent -Itests/include/listener -Icmocka-1.1.7/include/
+
+SRC				:=$(wildcard src/*.c)
+LISTENER_SRC	:=$(SRC) $(wildcard src/listener/*.c)
+AGENT_SRC		:=$(SRC) $(wildcard src/agent/*.c)
+TEST_SRC		:=$(wildcard tests/*.c) $(wildcard tests/agent_tests/*.c) $(wildcard tests/listener_tests/*.c) $(AGENT_SRC)
+
+all: bin/listener bin/agent bin/test
+
+bin/listener: src/listener/listener.c
+	$(CC) -g -o bin/listener $(LISTENER_INC) $(LISTENER_SRC) -lpthread
+
+bin/agent: src/agent/agent.c
+	$(CC) -g -o bin/agent $(AGENT_INC) $(AGENT_SRC) -lpthread
+	
+bin/test: tests/test.c
+	$(CC) $(TEST_INC) -L cmocka-1.1.7/build/src -o bin/test $(TEST_SRC) -lcmocka -DUNIT_TEST=true
+
+.PHONY: test_mocka
+test_mocka: bin/test
+	./bin/test
+
+.PHONY: clean
+clean:
+	rm -f $(ODIR)/*.o bin/listener bin/agent bin/test
+
+
+

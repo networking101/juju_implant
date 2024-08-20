@@ -1,5 +1,8 @@
 #include "implant.h"
 
+#ifndef _QUEUE_H
+#define _QUEUE_H
+
 #define QUEUE_SIZE		10000
 
 #ifndef QUEUE_STRUCTURE
@@ -11,7 +14,7 @@ typedef struct Queue{
 	void** array;
 } Queue;
 
-#endif
+#endif /* QUEUE_STRUCTURE */
 
 #ifndef QUEUE_MESSAGE_STRUCTURE
 #define QUEUE_MESSAGE_STRUCTURE
@@ -22,18 +25,21 @@ typedef struct Queue_Message{
 	Fragment* fragment;
 } Queue_Message;
 
-#endif
+#endif /* QUEUE_MESSAGE_STRUCTURE */
 
-struct Queue* createQueue(unsigned);
+Queue* createQueue(unsigned);
 
-int isFull(struct Queue*);
+int isFull(Queue*);
 
-int isEmpty(struct Queue*);
+int isEmpty(Queue*);
 
-void enqueue(struct Queue*, void*);
+void enqueue(Queue*, pthread_mutex_t*, void*);
 
-void* dequeue(struct Queue*);
+void* dequeue(Queue*, pthread_mutex_t*);
 
-void* front(struct Queue*);
+void* front(Queue*);
 
-void* rear(struct Queue*);
+void* rear(Queue*);
+
+#endif /* _QUEUE_H */
+

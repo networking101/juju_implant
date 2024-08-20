@@ -21,6 +21,7 @@ This is the main file for the listener. It will do the following:
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#include "utility.h"
 #include "implant.h"
 #include "queue.h"
 #include "base.h"
@@ -39,11 +40,11 @@ This is the main file for the listener. It will do the following:
 implant_poll *poll_struct;
 pthread_mutex_t poll_lock;
 // Receive Queue
-Queue* receive_queue;
-pthread_mutex_t receive_queue_lock;
+Queue* listener_receive_queue;
+pthread_mutex_t listener_receive_queue_lock;
 // Send Queue
-Queue* send_queue;
-pthread_mutex_t send_queue_lock;
+Queue* listener_send_queue;
+pthread_mutex_t listener_send_queue_lock;
 // Agent array
 Agent* agents[FDSIZE] = {}; 
 
@@ -56,12 +57,12 @@ int start_sockets(int port){
 
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
         printf("Socket failed\n");
-        return -1;
+        return RET_ERROR;
     }
 
     if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))){
         printf("setsockopt failed\n");
-        return -1;
+        return RET_ERROR;
     }
 
     addr.sin_family = AF_INET;
@@ -70,20 +71,20 @@ int start_sockets(int port){
 
     if (bind(sockfd, (struct sockaddr*)&addr, sizeof(addr)) < 0){
         printf("bind failed\n");
-        return -1;
+        return RET_ERROR;
     }
 
     if (listen(sockfd, LISTEN_BACKLOG) < 0){
         printf("listen failed\n");
-        return -1;
+        return RET_ERROR;
     }
 
     while(1){
         if ((new_socket = accept(sockfd, (struct sockaddr*)&addr, &addr_len)) < 0){
             printf("accept failed\n");
-            return -1;
+            return RET_ERROR;
         }
-        printf("DEBUG Agent connected %d\n", new_socket);
+        debug_print("Agent connected %d\n", new_socket);
         
         if (new_socket >= FDSIZE){
 			printf("too many connections\n");
@@ -99,8 +100,10 @@ int start_sockets(int port){
     }
     
     close(sockfd);
-    return 0;
+    return RET_OK;
 }
+
+#ifndef UNIT_TESTING
 int main(int argc, char *argv[]){
     int opt;
     int port = DEFAULT_PORT;
@@ -119,13 +122,13 @@ int main(int argc, char *argv[]){
                 break;
             case 'h':
                 printf("Help\n");
-                return 0;
+                return RET_OK;
             case '?':
                 printf("Unknown argument %c\n", optopt);
-                return -1;
+                return RET_ERROR;
             case ':':
                 printf("Missing argument %c\n", optopt);
-                return -1;
+                return RET_ERROR;
         }
     }
     
@@ -133,21 +136,24 @@ int main(int argc, char *argv[]){
     poll_struct->pfds = pfds;
 
     // Create receive queue
-    receive_queue = createQueue(QUEUE_SIZE);
-    pthread_mutex_init(&receive_queue_lock, NULL);
+    listener_receive_queue = createQueue(QUEUE_SIZE);
+    pthread_mutex_init(&listener_receive_queue_lock, NULL);
     // Create send queue
-    send_queue = createQueue(QUEUE_SIZE);
-    pthread_mutex_init(&send_queue_lock, NULL);
+    listener_send_queue = createQueue(QUEUE_SIZE);
+    pthread_mutex_init(&listener_send_queue_lock, NULL);
 
     // Start agent receive thread
-    pthread_create(&agent_receive_tid, NULL, agent_receive, NULL);
+    pthread_create(&agent_receive_tid, NULL, receive_from_agent, NULL);
     // Start agent send thread
-//    pthread_create(&agent_send_tid, NULL, agent_send, NULL);
+    pthread_create(&agent_send_tid, NULL, send_to_agent, NULL);
     // Start console thread
-//    pthread_create(&console_tid, NULL, console, NULL);
+    pthread_create(&console_tid, NULL, console, NULL);
     // Start message handler thread
     pthread_create(&message_handler_tid, NULL, handle_message, NULL);
 
     start_sockets(port);
-    return 0;
+    return RET_OK;
 }
+#endif /* UNIT_TESTING */
+
+

@@ -1,3 +1,6 @@
+#ifndef _BASE_H
+#define _BASE_H
+
 #ifndef IMPLANT_POLL_STRUCTURE
 #define IMPLANT_POLL_STRUCTURE
 
@@ -6,7 +9,7 @@ typedef struct implant_poll{
     struct pollfd *pfds;
 } implant_poll;
 
-#endif
+#endif /* IMPLANT_POLL_STRUCTURE */
 
 #ifndef AGENT_STRUCTURE
 #define AGENT_STRUCTURE
@@ -19,8 +22,11 @@ typedef struct Agent{
 	char* message;
 } Agent;
 
-#endif
+#endif /* AGENT_STRUCTURE */
 
 int poll_add(int);
 
 int poll_delete(int);
+
+#endif /* _BASE_H */
+

@@ -1,7 +1,9 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <pthread.h>
 
 #include "queue.h"
+#include "utility.h"
 
 Queue* createQueue(unsigned capacity){
 	Queue* queue = (Queue*)malloc(sizeof(Queue));
@@ -20,21 +22,25 @@ int isEmpty(Queue* queue){
 	return(queue->size == 0);
 }
 
-void enqueue(Queue* queue, void* item){
+void enqueue(Queue* queue, pthread_mutex_t* mutex, void* item){
+	pthread_mutex_lock(mutex);
 	if (isFull(queue))
 		return;
 	queue->rear = (queue->rear + 1) % queue->capacity;
 	queue->array[queue->rear] = item;
 	queue->size = queue->size + 1;
-//	printf("DEBUG %p enqueued to queue\n", item);
+	pthread_mutex_unlock(mutex);
+	debug_print("%p enqueued to queue\n", item);
 }
 
-void* dequeue(Queue* queue){
+void* dequeue(Queue* queue, pthread_mutex_t* mutex){
+	pthread_mutex_lock(mutex);
 	if (isEmpty(queue))
 		return NULL;
 	void* item = queue->array[queue->front];
 	queue->front = (queue->front + 1) % queue->capacity;
 	queue->size = queue->size - 1;
+	pthread_mutex_lock(mutex);
 	return item;
 }
 

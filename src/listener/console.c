@@ -22,11 +22,11 @@ It will pass commands to the message handler and receive responses from the mess
 extern implant_poll *poll_struct;
 extern pthread_mutex_t poll_lock;
 // Receive Queue
-extern Queue* receive_queue;
-extern pthread_mutex_t receive_queue_lock;
+extern Queue* listener_receive_queue;
+extern pthread_mutex_t listener_receive_queue_lock;
 // Send Queue
-extern Queue* send_queue;
-extern pthread_mutex_t send_queue_lock;
+extern Queue* listener_send_queue;
+extern pthread_mutex_t listener_send_queue_lock;
 
 int agent_console(int agent_fd){
 	const char* menu = "Implant %d selected.\n"
@@ -113,6 +113,5 @@ void *console(void *vargp){
     	puts(menu);
     	printf(">");
 	}
-	puts("JUJU2");
 	return 0;
 }
