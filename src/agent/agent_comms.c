@@ -11,6 +11,8 @@
 #include "queue.h"
 #include "agent_comms.h"
 
+#define SLEEP_TIME 2
+
 // Global variables
 // Receive Queue
 extern struct Queue* agent_receive_queue;
@@ -72,7 +74,7 @@ void *agent_send(void *vargp){
 	for (;;){
 		debug_print("sending fragment:\ttype: %d, index: %d, size: %d bytes\n", fragment.type, fragment.index, message_size);
 		send(*sockfd, &fragment, message_size, 0);
-		sleep(5);
+		sleep(SLEEP_TIME);
 	}
 	return 0;	
 }

@@ -3,6 +3,11 @@ all:
 	$(MAKE) -C src/listener
 	$(MAKE) -C tests
 
+debug:
+	$(MAKE) -C src/agent debug
+	$(MAKE) -C src/listener debug
+	
+
 .PHONY: test
 test: bin/test
 	./bin/test
