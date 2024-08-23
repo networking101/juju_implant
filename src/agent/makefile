@@ -2,7 +2,7 @@ CC				:= gcc
 INC				:=-I../../include -I../../include/agent
 SRC				:=$(wildcard ../*.c) $(wildcard *.c)
 
-FLAGS			:=-lpthread
+FLAGS			:=-lpthread -m32
 
 all: ../../bin/agent
 

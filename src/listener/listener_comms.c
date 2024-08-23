@@ -53,7 +53,7 @@ void *receive_from_agent(void *vargp){
 				debug_print("POLLIN  %d\n", pfds[i].fd);
 				int nbytes = recv(pfds[i].fd, (void*)&fragment, sizeof(Fragment), 0);
 				
-				debug_print("received fragment:\ttype: %d, index: %d, size: %d\n", fragment.type, fragment.index, nbytes);
+				debug_print("received fragment: type: %d, index: %d, size: %d\n", fragment.type, fragment.index, nbytes);
 				
 				// close file descriptor and remove from poll array
 				if (nbytes == 0){
@@ -72,7 +72,7 @@ void *receive_from_agent(void *vargp){
 					memset(message->fragment, 0, nbytes);
 					memcpy(message->fragment, &fragment, nbytes);
 					
-					debug_print("adding message to queue:\tid: %d, fragment_size: %d\n", message->id, message->fragment_size);
+					debug_print("adding message to queue: id: %d, fragment_size: %d\n", message->id, message->fragment_size);
 					enqueue(listener_receive_queue, &listener_receive_queue_lock, message);
 				}
 			}
@@ -85,10 +85,8 @@ void *receive_from_agent(void *vargp){
 void *send_to_agent(void *vargp){
 	Queue_Message* message;
 	
-//	int *fd_count = poll_struct->fd_count;
-//	struct pollfd *pfds = poll_struct->pfds;
-	
-	for(;;){	
+	for(;;){
+		sleep(1);
 		if (!(message = dequeue(listener_send_queue, &listener_send_queue_lock))) continue;
 		
 		int nbytes = send(message->id, message->fragment, message->fragment_size, 0);

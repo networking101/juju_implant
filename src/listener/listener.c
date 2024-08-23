@@ -15,7 +15,6 @@ This is the main file for the listener. It will do the following:
 #include <getopt.h>
 #include <pthread.h>
 #include <poll.h>
-#include <time.h>
 
 #include <sys/socket.h>
 #include <netinet/in.h>

@@ -13,8 +13,9 @@ This file is responsible for the following:
 #include <stdio.h>
 #include <unistd.h>
 #include <pthread.h>
-#include <time.h>
 #include <string.h>
+
+#include <arpa/inet.h>
 
 #include "utility.h"
 #include "queue.h"
@@ -37,6 +38,7 @@ void *handle_message(void*){
 	Fragment* fragment;
 	
 	for (;;){
+		sleep(1);
 		if (!(message = dequeue(listener_receive_queue, &listener_receive_queue_lock))) continue;
 		debug_print("%s\n", "removing message from queue");
 		
@@ -49,6 +51,7 @@ void *handle_message(void*){
 		fragment = message->fragment;
 		// if type is alive packet, update keep alive parameter
 		if (fragment->type == TYPE_ALIVE){
+			printf("Agent %d is alive: %lu seconds\n", message->id, (unsigned long)ntohl(fragment->first_payload.alive_time));
 			agents[message->id]->alive = (uint)time(NULL);
 		}
 		else if (fragment->type == TYPE_COMMAND || fragment->type == TYPE_PUT_FILE || fragment->type == TYPE_GET_FILE){

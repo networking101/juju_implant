@@ -21,6 +21,8 @@ pthread_mutex_t agent_receive_queue_lock;
 // Send Queue
 Queue* agent_send_queue;
 pthread_mutex_t agent_send_queue_lock;
+// Start time
+time_t start_time;
 
 int connect_to_listener(char* ip_addr, int port){
 
@@ -73,6 +75,8 @@ int connect_to_listener(char* ip_addr, int port){
 int main(int argc, char** argv){
     char* ip_addr = "10.0.2.15";
     int port = 55555;
+    
+    start_time = time(NULL);
     
     // Create receive queue
     agent_receive_queue = createQueue(QUEUE_SIZE);

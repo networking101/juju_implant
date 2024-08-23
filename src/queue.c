@@ -24,22 +24,23 @@ int isEmpty(Queue* queue){
 
 void enqueue(Queue* queue, pthread_mutex_t* mutex, void* item){
 	pthread_mutex_lock(mutex);
-	if (isFull(queue))
+	if (isFull(queue)){
 		pthread_mutex_unlock(mutex);
 		return;
+	}
 	queue->rear = (queue->rear + 1) % queue->capacity;
 	queue->array[queue->rear] = item;
 	queue->size = queue->size + 1;
 	pthread_mutex_unlock(mutex);
-	printf("TEST\n");
 	debug_print("%p enqueued to queue\n", item);
 }
 
 void* dequeue(Queue* queue, pthread_mutex_t* mutex){
 	pthread_mutex_lock(mutex);
-	if (isEmpty(queue))
+	if (isEmpty(queue)){
 		pthread_mutex_unlock(mutex);
 		return NULL;
+	}
 	void* item = queue->array[queue->front];
 	queue->front = (queue->front + 1) % queue->capacity;
 	queue->size = queue->size - 1;

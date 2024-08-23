@@ -1,3 +1,5 @@
+#include <stdint.h>
+
 #ifndef _IMPLANT_H
 #define _IMPLANT_H
 
@@ -14,7 +16,11 @@
 
 typedef struct First_Payload{
 	int32_t total_size;
-	char actual_payload[BUFFERSIZE - 4];
+	union {
+		char actual_payload[BUFFERSIZE - 4];
+		uint32_t alive_time;
+	};
+	
 } First_Payload;
 
 typedef struct Fragment{
