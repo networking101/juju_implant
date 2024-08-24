@@ -40,7 +40,6 @@ void *handle_message(void*){
 	for (;;){
 		sleep(1);
 		if (!(message = dequeue(listener_receive_queue, &listener_receive_queue_lock))) continue;
-		debug_print("%s\n", "removing message from queue");
 		
 		// check if socket file descriptor was removed from agents global variable
 		if (agents[message->id] == NULL){
@@ -50,14 +49,14 @@ void *handle_message(void*){
 		
 		fragment = message->fragment;
 		// if type is alive packet, update keep alive parameter
-		if (fragment->type == TYPE_ALIVE){
-			printf("Agent %d is alive: %lu seconds\n", message->id, (unsigned long)ntohl(fragment->first_payload.alive_time));
+		if (ntohl(fragment->type) == TYPE_ALIVE){
+			debug_print("Agent %d is alive: %lu seconds\n", message->id, (unsigned long)ntohl(fragment->first_payload.alive_time));
 			agents[message->id]->alive = (uint)time(NULL);
 		}
-		else if (fragment->type == TYPE_COMMAND || fragment->type == TYPE_PUT_FILE || fragment->type == TYPE_GET_FILE){
-			if (agents[message->id]->last_fragment_index == -1 && fragment->index == 0){
+		else if (ntohl(fragment->type) == TYPE_COMMAND || ntohl(fragment->type) == TYPE_PUT_FILE || ntohl(fragment->type) == TYPE_GET_FILE){
+			if (agents[message->id]->last_fragment_index == -1 && ntohl(fragment->index == 0)){
 				// get payload size
-				agents[message->id]->total_message_size = fragment->first_payload.total_size;
+				agents[message->id]->total_message_size = ntohl(fragment->first_payload.total_size);
 				
 				// set last fragment index
 				agents[message->id]->last_fragment_index = 0;
@@ -75,7 +74,7 @@ void *handle_message(void*){
 				agents[message->id]->current_message_size = this_payload_size;
 				
 			}
-			else if (fragment->index == agents[message->id]->last_fragment_index++){
+			else if (ntohl(fragment->index) == agents[message->id]->last_fragment_index++){
 				int this_payload_size = message->fragment_size - sizeof(fragment->type) - sizeof(fragment->index);
 				
 				// copy payload to end of message buffer
@@ -106,12 +105,13 @@ int prepare_message(int sockfd, int type, char* message, int message_size){
 	Fragment* fragment;
 	int bytes_sent = 0;
 	char* buf;
+	int index = 0;
 	
 	// prepare first fragment with size in first 4 bytes
 	fragment = malloc(sizeof(Fragment));
-	fragment->type = type;
-	fragment->index = 0;
-	fragment->first_payload.total_size = message_size;
+	fragment->type = htonl(type);
+	fragment->index = htonl(index++);
+	fragment->first_payload.total_size = htonl(message_size);
 	
 	bytes_sent = message_size < (BUFFERSIZE - 4) ? message_size : BUFFERSIZE - 4;
 	memcpy(fragment->first_payload.actual_payload, message, bytes_sent);
@@ -125,8 +125,8 @@ int prepare_message(int sockfd, int type, char* message, int message_size){
 	
 	while (bytes_sent < message_size){
 		fragment = malloc(sizeof(Fragment));
-		fragment->type = type;
-		fragment->index = 0;
+		fragment->type = htonl(type);
+		fragment->index = htonl(index++);
 		
 		int num_fragment_bytes = (message_size - bytes_sent) < BUFFERSIZE ? (message_size - bytes_sent) : BUFFERSIZE;
 		memcpy(fragment->next_payload, message + bytes_sent, num_fragment_bytes);

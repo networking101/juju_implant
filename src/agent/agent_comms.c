@@ -12,8 +12,6 @@
 #include "queue.h"
 #include "agent_comms.h"
 
-#define SLEEP_TIME 2
-
 // Global variables
 // Receive Queue
 extern struct Queue* agent_receive_queue;
@@ -21,8 +19,6 @@ extern pthread_mutex_t agent_receive_queue_lock;
 // Send Queue
 extern struct Queue* agent_send_queue;
 extern pthread_mutex_t agent_send_queue_lock;
-// Start time
-extern time_t start_time;
 
 void *agent_receive(void *vargp){
 	int *sockfd = (int*)vargp;
@@ -46,6 +42,8 @@ void *agent_receive(void *vargp){
 			exit(-1);
 		}
 		
+		debug_print("received fragment: type: %d, index: %d, size: %d\n", ntohl(fragment.type), ntohl(fragment.index), nbytes);
+		
 		Queue_Message* message = malloc(sizeof(message));
 		message->fragment = malloc(nbytes);
 		message->id = -1;
@@ -60,25 +58,21 @@ void *agent_receive(void *vargp){
 
 void *agent_send(void *vargp){
 	int *sockfd = (int*)vargp;
-	uint message_size = 0;
-	char buf[BUFFERSIZE];
+	Queue_Message* message;
 	
-	Fragment fragment;
-	
-	fragment.type = 0;
-	fragment.index = 0;
-	// set first 4 bytes of message to message size
-	fragment.first_payload.total_size = sizeof(fragment.first_payload.alive_time);
-	
-	
-	// size = type (4 bytes) + index (4 bytes) + payload size (4 bytes) + alive time (4 bytes)
-	message_size = sizeof(fragment.type) + sizeof(fragment.index) + sizeof(fragment.first_payload.total_size) + sizeof(fragment.first_payload.alive_time);
-	
-	for (;;){
-		fragment.first_payload.alive_time = htonl(time(NULL) - start_time);
-		debug_print("sending fragment:\ttype: %d, index: %d, size: %d bytes\n", fragment.type, fragment.index, message_size);
-		send(*sockfd, &fragment, message_size, 0);
-		sleep(SLEEP_TIME);
+	for(;;){
+		if (!(message = dequeue(agent_send_queue, &agent_send_queue_lock))) continue;
+		
+		int nbytes = send(*sockfd, message->fragment, message->fragment_size, 0);
+		if (nbytes != message->fragment_size){
+			printf("Send error\n");
+			exit(-1);
+		}
+		
+		free(message->fragment);
+		free(message);
 	}
 	return 0;	
 }
+
+

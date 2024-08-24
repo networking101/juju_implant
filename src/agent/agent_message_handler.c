@@ -4,6 +4,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <arpa/inet.h>
+
 #include "queue.h"
 #include "implant.h"
 #include "utility.h"
@@ -31,13 +33,13 @@ STATIC int parse_first_fragment(Queue_Message* q_message, Assembled_Message* a_m
 	Fragment* fragment = q_message->fragment;
 	
 	// check if we are receiving the first index of a message
-	if (fragment->index != 0){
+	if (ntohl(fragment->index) != 0){
 		return RET_ERROR;
 	}
-	a_message->last_fragment_index = fragment->index;
+	a_message->last_fragment_index = ntohl(fragment->index);
 	
 	// assign type
-	a_message->type = fragment->type;
+	a_message->type = ntohl(fragment->type);
 	
 	// get payload size
 	a_message->total_message_size = fragment->first_payload.total_size;
@@ -56,6 +58,9 @@ STATIC int parse_first_fragment(Queue_Message* q_message, Assembled_Message* a_m
 	a_message->current_message_size = this_payload_size;
 	
 	debug_print("first message:\t total_size: %d, current_message_size: %d, type: %d\n", a_message->total_message_size, a_message->current_message_size, a_message->type);
+	
+	free(q_message->fragment);
+	free(q_message);
 	return RET_OK;
 }
 
@@ -63,11 +68,11 @@ STATIC int parse_next_fragment(Queue_Message* q_message, Assembled_Message* a_me
 	Fragment* fragment = q_message->fragment;
 	
 	// check if we are receiving the next expected index of a message
-	if (fragment->index != a_message->last_fragment_index + 1 || fragment->type != a_message->type){
+	if (ntohl(fragment->index) != a_message->last_fragment_index + 1 || ntohl(fragment->type) != a_message->type){
 		a_message->last_fragment_index = -1;
 		return RET_ERROR;
 	}
-	a_message->last_fragment_index = fragment->index;
+	a_message->last_fragment_index = ntohl(fragment->index);
 	
 	// get the size of payload in this fragment
 	int this_payload_size = q_message->fragment_size - sizeof(fragment->type) - sizeof(fragment->index);
@@ -79,6 +84,9 @@ STATIC int parse_next_fragment(Queue_Message* q_message, Assembled_Message* a_me
 	a_message->current_message_size += this_payload_size;
 	
 	debug_print("next message:\tcurrent_message_size: %d, type: %d\n", a_message->current_message_size, a_message->type);
+	
+	free(q_message->fragment);
+	free(q_message);
 	return RET_OK;
 }
 

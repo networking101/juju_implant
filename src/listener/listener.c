@@ -15,6 +15,8 @@ This is the main file for the listener. It will do the following:
 #include <getopt.h>
 #include <pthread.h>
 #include <poll.h>
+#include <stdbool.h>
+#include <signal.h>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -33,6 +35,7 @@ This is the main file for the listener. It will do the following:
 #define BUFFER_SIZE		256
 #define AGENT_TIMEOUT	60
 #define DEFAULT_PORT	55555
+#define CHECK_ALIVE_FREQUENCY	10
 
 // Globals
 // Socket Poll Structure
@@ -45,7 +48,36 @@ pthread_mutex_t listener_receive_queue_lock;
 Queue* listener_send_queue;
 pthread_mutex_t listener_send_queue_lock;
 // Agent array
-Agent* agents[FDSIZE] = {}; 
+Agent* agents[FDSIZE] = {0}; 
+// Alarm flag
+volatile sig_atomic_t listener_alive_flag = false;
+
+void listener_alive_alarm(int sig){
+	listener_alive_flag = true;
+}
+
+void *check_alive(void *vargp){
+	signal(SIGALRM, listener_alive_alarm);
+	alarm(CHECK_ALIVE_FREQUENCY);
+	for (;;){
+		sleep(1);
+		if (listener_alive_flag){
+			for (int i = 0; i < FDSIZE; i++){
+				if (agents[i] && agents[i]->alive + AGENT_TIMEOUT < time(NULL)){
+					printf("Agent %d timeout, removing from poll\n", i);
+					close(i);
+					poll_delete(i);
+					free(agents[i]);
+					agents[i] == NULL;
+				}
+			}
+			
+			listener_alive_flag = false;
+			alarm(CHECK_ALIVE_FREQUENCY);
+		}
+	}
+	return 0;	
+}
 
 int start_sockets(int port){
     int sockfd, new_socket;
@@ -78,7 +110,7 @@ int start_sockets(int port){
         return RET_ERROR;
     }
 
-    while(1){
+    for (;;){
         if ((new_socket = accept(sockfd, (struct sockaddr*)&addr, &addr_len)) < 0){
             printf("accept failed\n");
             return RET_ERROR;
@@ -94,7 +126,7 @@ int start_sockets(int port){
         poll_add(new_socket);
         agents[new_socket] = malloc(sizeof(Agent));
         memset(agents[new_socket], 0, sizeof(Agent));
-        agents[new_socket]->alive = (uint)time(NULL);
+        agents[new_socket]->alive = time(NULL);
         agents[new_socket]->last_fragment_index = -1;
     }
     
@@ -106,7 +138,7 @@ int start_sockets(int port){
 int main(int argc, char *argv[]){
     int opt;
     int port = DEFAULT_PORT;
-    pthread_t agent_receive_tid, agent_send_tid, console_tid, message_handler_tid;
+    pthread_t agent_receive_tid, agent_send_tid, console_tid, message_handler_tid, check_alive_tid;
     struct pollfd *pfds;
     int fd_count = 0;
     int fd_size = FDSIZE;
@@ -149,6 +181,8 @@ int main(int argc, char *argv[]){
     pthread_create(&console_tid, NULL, console, NULL);
     // Start message handler thread
     pthread_create(&message_handler_tid, NULL, handle_message, NULL);
+    // Start keep alive thread
+    pthread_create(&check_alive_tid, NULL, check_alive, NULL);
 
     start_sockets(port);
     return RET_OK;

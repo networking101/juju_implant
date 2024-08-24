@@ -14,6 +14,7 @@ This function will send and receive buffers to the agents.
 #include <stdbool.h>
 
 #include <sys/socket.h>
+#include <arpa/inet.h>
 
 #include "utility.h"
 #include "queue.h"
@@ -32,10 +33,6 @@ extern pthread_mutex_t listener_receive_queue_lock;
 extern Queue* listener_send_queue;
 extern pthread_mutex_t listener_send_queue_lock;
 
-bool check_alive(){
-	return true;
-}
-
 void *receive_from_agent(void *vargp){
 	Fragment fragment;
 	char* buffer;
@@ -53,11 +50,9 @@ void *receive_from_agent(void *vargp){
 				debug_print("POLLIN  %d\n", pfds[i].fd);
 				int nbytes = recv(pfds[i].fd, (void*)&fragment, sizeof(Fragment), 0);
 				
-				debug_print("received fragment: type: %d, index: %d, size: %d\n", fragment.type, fragment.index, nbytes);
-				
-				// close file descriptor and remove from poll array
 				if (nbytes == 0){
-					debug_print("%s\n", "connection closed");
+					// close file descriptor and remove from poll array
+					printf("%s\n", "connection closed");
 					poll_delete(i);
 				}
 				else if (nbytes == -1){
@@ -65,6 +60,8 @@ void *receive_from_agent(void *vargp){
 					exit(-1);
 				}
 				else{
+					debug_print("received fragment: type: %d, index: %d, size: %d\n", ntohl(fragment.type), ntohl(fragment.index), nbytes);		
+					
 					Queue_Message* message = malloc(sizeof(message));
 					message->fragment = malloc(nbytes);
 					message->id = pfds[i].fd;
