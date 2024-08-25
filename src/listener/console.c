@@ -12,11 +12,12 @@ It will pass commands to the message handler and receive responses from the mess
 #include <pthread.h>
 #include <poll.h>
 
+#include "utility.h"
 #include "queue.h"
 #include "implant.h"
 #include "base.h"
 #include "console.h"
-#include "message_handler.h"
+#include "listener_handler.h"
 
 // Global variables
 extern implant_poll *poll_struct;
@@ -35,22 +36,25 @@ int agent_console(int agent_fd){
 				 "2 - put file\n"
 				 "3 - get file\n"
 				 "4 - go back\n\n";
-	char buffer[BUFFERSIZE];
-	char* buf;
+	char opt_buf[BUFFERSIZE];
+	char command_buf[BUFFERSIZE];
+	char* buffer;
 	long option;
 	printf(menu, agent_fd);
 	printf(">");
 				 
-	while(fgets(buffer, BUFFERSIZE, stdin)){
-		option = strtol(buffer, NULL, 10);
+	while(fgets(opt_buf, BUFFERSIZE - 1, stdin)){
+		option = strtol(opt_buf, NULL, 10);
 		switch(option){
 	        case 1:	        	
 	        	printf("Command > ");
-	        	buf = malloc(BUFFERSIZE);
-	        	memset(buf, 0, BUFFERSIZE);
-	        	fgets(buf, BUFFERSIZE - 1, stdin);
+	        	buffer = malloc(BUFFERSIZE);
+	        	memset(command_buf, 0, BUFFERSIZE);
+	        	fgets(command_buf, BUFFERSIZE - 1, stdin);
+	        	debug_print("User input: %s\n", command_buf);
+	        	memcpy(buffer, command_buf, BUFFERSIZE);
 	        	
-	        	prepare_message(agent_fd, TYPE_COMMAND, buffer, strlen(buffer));
+	        	listener_prepare_message(agent_fd, TYPE_COMMAND, buffer, strlen(buffer));
 	        	break;
 	        case 2:
 	        	break;

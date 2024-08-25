@@ -3,6 +3,6 @@
 
 void* handle_message(void*);
 
-int prepare_message(int, int, char*, int);
+int listener_prepare_message(int, int, char*, int);
 
 #endif /* _MESSAGE_HANDLER_H */

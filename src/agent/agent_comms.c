@@ -47,7 +47,7 @@ void *agent_receive(void *vargp){
 		Queue_Message* message = malloc(sizeof(message));
 		message->fragment = malloc(nbytes);
 		message->id = -1;
-		message->fragment_size = nbytes;
+		message->size = nbytes;
 		memset(message->fragment, 0, nbytes);
 		memcpy(message->fragment, &fragment, nbytes);
 		
@@ -63,8 +63,10 @@ void *agent_send(void *vargp){
 	for(;;){
 		if (!(message = dequeue(agent_send_queue, &agent_send_queue_lock))) continue;
 		
-		int nbytes = send(*sockfd, message->fragment, message->fragment_size, 0);
-		if (nbytes != message->fragment_size){
+		debug_print("sending fragment: type: %d, index: %d, size: %d\n", ntohl(message->fragment->type), ntohl(message->fragment->index), ntohl(message->fragment->first_payload.total_size));
+		
+		int nbytes = send(*sockfd, message->fragment, message->size, 0);
+		if (nbytes != message->size){
 			printf("Send error\n");
 			exit(-1);
 		}

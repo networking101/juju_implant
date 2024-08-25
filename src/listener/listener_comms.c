@@ -65,11 +65,11 @@ void *receive_from_agent(void *vargp){
 					Queue_Message* message = malloc(sizeof(message));
 					message->fragment = malloc(nbytes);
 					message->id = pfds[i].fd;
-					message->fragment_size = nbytes;
+					message->size = nbytes;
 					memset(message->fragment, 0, nbytes);
 					memcpy(message->fragment, &fragment, nbytes);
 					
-					debug_print("adding message to queue: id: %d, fragment_size: %d\n", message->id, message->fragment_size);
+					debug_print("adding message to queue: id: %d, size: %d\n", message->id, message->size);
 					enqueue(listener_receive_queue, &listener_receive_queue_lock, message);
 				}
 			}
@@ -86,8 +86,8 @@ void *send_to_agent(void *vargp){
 		sleep(1);
 		if (!(message = dequeue(listener_send_queue, &listener_send_queue_lock))) continue;
 		
-		int nbytes = send(message->id, message->fragment, message->fragment_size, 0);
-		if (nbytes != message->fragment_size){
+		int nbytes = send(message->id, message->fragment, message->size, 0);
+		if (nbytes != message->size){
 			printf("Send error\n");
 			exit(-1);
 		}

@@ -21,8 +21,11 @@ typedef struct Queue{
 
 typedef struct Queue_Message{
 	int32_t id;
-	int32_t fragment_size;
-	Fragment* fragment;
+	int32_t size;
+	union{
+		Fragment* fragment;
+		char* buffer;
+	};
 } Queue_Message;
 
 #endif /* QUEUE_MESSAGE_STRUCTURE */

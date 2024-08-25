@@ -28,7 +28,7 @@ This is the main file for the listener. It will do the following:
 #include "base.h"
 #include "listener_comms.h"
 #include "console.h"
-#include "message_handler.h"
+#include "listener_handler.h"
 
 #define FDSIZE			100
 #define LISTEN_BACKLOG	3

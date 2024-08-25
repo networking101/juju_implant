@@ -32,7 +32,7 @@ void enqueue(Queue* queue, pthread_mutex_t* mutex, void* item){
 	queue->array[queue->rear] = item;
 	queue->size = queue->size + 1;
 	pthread_mutex_unlock(mutex);
-	debug_print("%p enqueued to queue\n", item);
+//	debug_print("%p enqueued to queue\n", item);
 }
 
 void* dequeue(Queue* queue, pthread_mutex_t* mutex){
@@ -45,7 +45,7 @@ void* dequeue(Queue* queue, pthread_mutex_t* mutex){
 	queue->front = (queue->front + 1) % queue->capacity;
 	queue->size = queue->size - 1;
 	pthread_mutex_unlock(mutex);
-	debug_print("%p dequeued from queue\n", item);
+//	debug_print("%p dequeued from queue\n", item);
 	return item;
 }
 

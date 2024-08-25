@@ -8,7 +8,7 @@
 #include <string.h>
 
 #include "queue.h"
-#include "agent_message_handler.h"
+#include "agent_handler.h"
 
 #define ALIVE	"ALIVE"
 
@@ -25,9 +25,9 @@ static void test_parse_first_fragment_short_message(void **state){
 	fragment.first_payload.total_size = actual_payload_len;
 	strcpy(fragment.first_payload.actual_payload, ALIVE);
 	
-	// fragment_size = type (4 bytes) + index (4 bytes) + payload
+	// size = type (4 bytes) + index (4 bytes) + payload
 	//															-> final size (4 bytes) + length of message (5 bytes)  
-	q_message.fragment_size = sizeof(fragment.type) + sizeof(fragment.index) + sizeof(fragment.first_payload.total_size) + actual_payload_len;
+	q_message.size = sizeof(fragment.type) + sizeof(fragment.index) + sizeof(fragment.first_payload.total_size) + actual_payload_len;
 	q_message.fragment = &fragment;
 	
 	a_message.last_fragment_index = -1;
@@ -51,7 +51,7 @@ static void test_parse_first_fragment_short_message(void **state){
 	memset(&q_message, 0, sizeof(Queue_Message));
 	memset(&a_message, 0, sizeof(Assembled_Message));
 	
-	q_message.fragment_size = 17;
+	q_message.size = 17;
 	q_message.fragment = (Fragment*)static_fragment;
 	
 	a_message.last_fragment_index = -1;
@@ -84,8 +84,8 @@ static void test_parse_first_fragment_long_message(void **state){
 	int actual_payload_len = (int)strlen(fragment.first_payload.actual_payload);
 	fragment.first_payload.total_size = actual_payload_len + 10;			// We are indicating that the entire message cannot fit in 1 fragment
 	
-	// fragment_size = type (4 bytes) + index (4 bytes) + payload (4096)  
-	q_message.fragment_size = sizeof(fragment.type) + sizeof(fragment.index) + sizeof(fragment.first_payload.total_size) + actual_payload_len;
+	// size = type (4 bytes) + index (4 bytes) + payload (4096)  
+	q_message.size = sizeof(fragment.type) + sizeof(fragment.index) + sizeof(fragment.first_payload.total_size) + actual_payload_len;
 	q_message.fragment = &fragment;
 	
 	a_message.last_fragment_index = -1;
@@ -118,9 +118,9 @@ static void test_parse_first_fragment_wrong_frame_index(void **state){
 	fragment.first_payload.total_size = actual_payload_len;
 	strcpy(fragment.first_payload.actual_payload, ALIVE);
 	
-	// fragment_size = type (4 bytes) + index (4 bytes) + payload
+	// size = type (4 bytes) + index (4 bytes) + payload
 	//															-> final size (4 bytes) + length of message (5 bytes)  
-	q_message.fragment_size = sizeof(fragment.type) + sizeof(fragment.index) + sizeof(fragment.first_payload.total_size) + actual_payload_len;
+	q_message.size = sizeof(fragment.type) + sizeof(fragment.index) + sizeof(fragment.first_payload.total_size) + actual_payload_len;
 	q_message.fragment = &fragment;
 	
 	a_message.last_fragment_index = -1;
@@ -137,7 +137,7 @@ static void test_parse_first_fragment_wrong_frame_index(void **state){
 	memset(&q_message, 0, sizeof(Queue_Message));
 	memset(&a_message, 0, sizeof(Assembled_Message));
 	
-	q_message.fragment_size = 17;
+	q_message.size = 17;
 	q_message.fragment = (Fragment*)static_fragment;
 	
 	a_message.last_fragment_index = -1;
@@ -166,8 +166,8 @@ static void test_parse_next_fragment_short_message(void **state){
 	int this_payload_len = (int)strlen(ALIVE);
 	strcpy(fragment.next_payload, ALIVE);
 	
-	// fragment_size = type (4 bytes) + index (4 bytes) + payload (5 bytes)  
-	q_message.fragment_size = sizeof(fragment.type) + sizeof(fragment.index) + this_payload_len;
+	// size = type (4 bytes) + index (4 bytes) + payload (5 bytes)  
+	q_message.size = sizeof(fragment.type) + sizeof(fragment.index) + this_payload_len;
 	q_message.fragment = &fragment;
 	
 	a_message.type = 1;
@@ -194,7 +194,7 @@ static void test_parse_next_fragment_short_message(void **state){
 //	memset(&q_message, 0, sizeof(Queue_Message));
 //	memset(&a_message, 0, sizeof(Assembled_Message));
 //	
-//	q_message.fragment_size = 13;
+//	q_message.size = 13;
 //	q_message.fragment = (Fragment*)static_fragment;
 //	
 //	a_message.type = 1;
