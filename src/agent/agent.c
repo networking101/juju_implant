@@ -48,7 +48,6 @@ void *keep_alive(void *vargp){
 	signal(SIGALRM, agent_alive_alarm);
 	alarm(ALIVE_FREQUENCY);
 	for (;;){
-		sleep(1);
 		if (agent_alive_flag){
 			debug_print("%s\n", "Sending alive packet");
 			

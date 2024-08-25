@@ -60,7 +60,6 @@ void *check_alive(void *vargp){
 	signal(SIGALRM, listener_alive_alarm);
 	alarm(CHECK_ALIVE_FREQUENCY);
 	for (;;){
-		sleep(1);
 		if (listener_alive_flag){
 			for (int i = 0; i < FDSIZE; i++){
 				if (agents[i] && agents[i]->alive + AGENT_TIMEOUT < time(NULL)){
@@ -68,7 +67,7 @@ void *check_alive(void *vargp){
 					close(i);
 					poll_delete(i);
 					free(agents[i]);
-					agents[i] == NULL;
+					agents[i] = NULL;
 				}
 			}
 			

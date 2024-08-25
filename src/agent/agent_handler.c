@@ -34,17 +34,17 @@ STATIC int agent_handle_command(Assembled_Message* a_message){
 	return 0;
 }
 
-STATIC int agent_handle_put_file(void){
+STATIC int agent_handle_put_file(Assembled_Message* a_message){
 	return 0;
 }
 
-STATIC int agent_handle_get_file(void){
+STATIC int agent_handle_get_file(Assembled_Message* a_message){
 	return 0;
 }
 
 STATIC int parse_first_fragment(Queue_Message* q_message, Assembled_Message* a_message){
 	Fragment* fragment = q_message->fragment;
-	printf("Fragment: %d, %d, %d, %s\n", ntohl(fragment->type), ntohl(fragment->index), ntohl(fragment->first_payload.total_size), fragment->first_payload.actual_payload);
+	debug_print("Fragment: %d, %d, %d, %s\n", ntohl(fragment->type), ntohl(fragment->index), ntohl(fragment->first_payload.total_size), fragment->first_payload.actual_payload);
 	
 	// check if we are receiving the first index of a message
 	if (ntohl(fragment->index) != 0){
@@ -105,54 +105,75 @@ STATIC int parse_next_fragment(Queue_Message* q_message, Assembled_Message* a_me
 }
 
 
-void* agent_handle_message(void*){
-	Queue_Message* message;
-	Assembled_Message assembled_message = {0};
-	
-	assembled_message.last_fragment_index = -1;
-	
-	for (;;){
-		sleep(1);
-		if (!(message = dequeue(agent_receive_queue, &agent_receive_queue_lock))) continue;
-		debug_print("dequeued message %d\n", message->size);
+int agent_handle_message_fragment(Assembled_Message* a_message){
+	int ret_val = RET_OK;
+	Queue_Message* q_message;
+
+	if (q_message = dequeue(agent_receive_queue, &agent_receive_queue_lock)){
+		debug_print("dequeued message %d\n", q_message->size);
 		
-		if (assembled_message.last_fragment_index == -1){
-			
-			int retval = parse_first_fragment(message, &assembled_message);
+		if (a_message->last_fragment_index == -1){
+		
+			int retval = parse_first_fragment(q_message, a_message);
 			if (retval != RET_OK){
 				debug_print("%s\n", "first message out of order");
-				continue;
 			}
 		}
 		else{
-			int retval = parse_next_fragment(message, &assembled_message);
+			int retval = parse_next_fragment(q_message, a_message);
 			if (retval != RET_OK){
-				assembled_message.last_fragment_index = -1;
+				a_message->last_fragment_index = -1;
 				debug_print("%s\n", "next message out of order");
-				continue;
 			}
 		}
+	}
+	
+	return ret_val;
+}
+
+int agent_handle_complete_message(Assembled_Message* a_message){
+	int ret_val = RET_OK;
+	
+	if (a_message->last_fragment_index != -1 && a_message->total_message_size == a_message->current_message_size){
+		debug_print("received full message %d, %d, %s\n", a_message->type, a_message->total_message_size, a_message->complete_message);
+		a_message->last_fragment_index = -1;
+		if (a_message->type == TYPE_COMMAND){
+			agent_handle_command(a_message);
+		}
+		else if (a_message->type == TYPE_PUT_FILE){
+			agent_handle_put_file(a_message);
+		}
+		else if (a_message->type == TYPE_GET_FILE){
+			agent_handle_get_file(a_message);
+		}
+		else{
+			printf("ERROR unknown fragment type\n");
+			ret_val = RET_ERROR;
+		}
+	}
+	
+	return ret_val;
+}
+
+void* agent_handle_message(void*){
+	int ret_val;
+	Assembled_Message assembled_message = {0};
+	assembled_message.last_fragment_index = -1;
+	
+	for (;;){
+		if ((ret_val = agent_handle_message_fragment(&assembled_message)) != RET_OK){
+			printf("ERROR agent_handle_message_fragment\n");
+			exit(ret_val);
+		}
 		
-		if (assembled_message.total_message_size == assembled_message.current_message_size){
-			debug_print("received full message %d, %d, %s\n", assembled_message.type, assembled_message.total_message_size, assembled_message.complete_message);
-			assembled_message.last_fragment_index = -1;
-			if (assembled_message.type == TYPE_COMMAND){
-				agent_handle_command(&assembled_message);
-			}
-			else if (assembled_message.type == TYPE_PUT_FILE){
-				agent_handle_put_file();
-			}
-			else if (assembled_message.type == TYPE_GET_FILE){
-				agent_handle_get_file();
-			}
-			else{
-				printf("ERROR unknown fragment type\n");
-				exit(-1);
-			}
+		if ((ret_val = agent_handle_complete_message(&assembled_message)) != RET_OK){
+			printf("ERROR agent_handle_complete_message\n");
+			exit(ret_val);
 		}
 	}
 	return 0;
 }
+	
 
 int agent_prepare_message(int type, char* buffer, int message_size){
 	Queue_Message* q_message;
@@ -201,5 +222,8 @@ int agent_prepare_message(int type, char* buffer, int message_size){
 	
 	return 0;	
 }
-	
+
+
+
+
 	

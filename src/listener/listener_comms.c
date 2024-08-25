@@ -83,7 +83,6 @@ void *send_to_agent(void *vargp){
 	Queue_Message* message;
 	
 	for(;;){
-		sleep(1);
 		if (!(message = dequeue(listener_send_queue, &listener_send_queue_lock))) continue;
 		
 		int nbytes = send(message->id, message->fragment, message->size, 0);

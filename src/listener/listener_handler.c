@@ -38,7 +38,6 @@ void *handle_message(void*){
 	Fragment* fragment;
 	
 	for (;;){
-		sleep(1);
 		if (!(message = dequeue(listener_receive_queue, &listener_receive_queue_lock))) continue;
 		
 		// check if socket file descriptor was removed from agents global variable

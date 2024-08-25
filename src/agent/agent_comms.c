@@ -26,7 +26,6 @@ void *agent_receive(void *vargp){
 	char* buffer;
 	
 	for (;;){
-		sleep(1);
 		uint message_size = 0;
 		uint bytes_received = 0;
 		
