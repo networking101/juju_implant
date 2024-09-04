@@ -1,8 +1,6 @@
 #ifndef _CONSOLE_H
 #define _CONSOLE_H
 
-int agent_console(int);
-
-void *console(void*);
+void *console_thread(void*);
 
 #endif /* _CONSOLE_H */

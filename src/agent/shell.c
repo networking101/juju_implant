@@ -9,10 +9,8 @@
 #include "queue.h"
 #include "implant.h"
 #include "agent_handler.h"
+#include "shell.h"
 
-#define STDIN		0
-#define STDOUT		1
-#define STDERR		2
 #define PIPE_OUT	0
 #define PIPE_IN		1
 

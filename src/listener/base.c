@@ -1,33 +1,45 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 #include <pthread.h>
 #include <poll.h>
 #include <sys/socket.h>
 
+#include "utility.h"
+#include "implant.h"
 #include "base.h"
 
 // Global variables
-extern struct implant_poll *poll_struct;
-extern pthread_mutex_t poll_lock;
+// Agents poll and states
+extern Connected_Agents *connected_agents;
+extern pthread_mutex_t agents_lock;
 
-int poll_add(int sockfd){
-	pthread_mutex_lock(&poll_lock);
-	poll_struct->pfds[*(poll_struct->fd_count)].fd = sockfd;
-    poll_struct->pfds[*(poll_struct->fd_count)].events = POLLIN;
-    *(poll_struct->fd_count) = *(poll_struct->fd_count) + 1;
-    pthread_mutex_unlock(&poll_lock);
+int agent_add(int sockfd){
+	connected_agents->pfds[sockfd].fd = sockfd;
+    connected_agents->pfds[sockfd].events = POLLIN;
+    *(connected_agents->fd_count) = *(connected_agents->fd_count) + 1;
+
+	memset(&(connected_agents->agents[sockfd]), 0, sizeof(Agent));
+	connected_agents->agents[sockfd].alive = time(NULL);
+	connected_agents->agents[sockfd].last_fragment_index = -1;
     
-	return 0;
+	return RET_OK;
 }
 
-int poll_delete(int index){	
-	int *fd_count = poll_struct->fd_count;
-	struct pollfd *pfds = poll_struct->pfds;
+int agent_delete(int sockfd){	
+	int *fd_count = connected_agents->fd_count;
+	struct pollfd *pfds = connected_agents->pfds;
 
-	pthread_mutex_lock(&poll_lock);
-	close(pfds[index].fd);
-	pfds[index] = pfds[*fd_count-1];
-	*(poll_struct->fd_count) = *(poll_struct->fd_count) - 1;
-    pthread_mutex_unlock(&poll_lock);
+	close(sockfd);
+	pfds[sockfd] = pfds[*fd_count-1];
+	*(connected_agents->fd_count) = *(connected_agents->fd_count) - 1;
+
+	connected_agents->agents[sockfd].alive = 0;
+	if (connected_agents->agents[sockfd].message){
+		free(connected_agents->agents[sockfd].message);
+		connected_agents->agents[sockfd].message = NULL;
+	}
     
-	return 0;
+	return RET_OK;
 }

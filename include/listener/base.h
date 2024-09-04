@@ -1,18 +1,9 @@
 #ifndef _BASE_H
 #define _BASE_H
 
-#ifndef IMPLANT_POLL_STRUCTURE
-#define IMPLANT_POLL_STRUCTURE
-
-typedef struct implant_poll{
-    int *fd_count;
-    struct pollfd *pfds;
-} implant_poll;
-
-#endif /* IMPLANT_POLL_STRUCTURE */
-
-#ifndef AGENT_STRUCTURE
-#define AGENT_STRUCTURE
+#define POLL_TIMEOUT	10			// 10 ms
+#define FDSIZE			100
+#define SELECT_TIMEOUT  1
 
 typedef struct Agent{
 	uint alive;
@@ -22,11 +13,16 @@ typedef struct Agent{
 	char* message;
 } Agent;
 
-#endif /* AGENT_STRUCTURE */
+typedef struct Connected_Agents{
+    int *fd_count;
+    struct pollfd *pfds;
+	Agent *agents;
+} Connected_Agents;
 
-int poll_add(int);
 
-int poll_delete(int);
+int agent_add(int);
+
+int agent_delete(int);
 
 #endif /* _BASE_H */
 

@@ -3,8 +3,9 @@
 #ifndef _IMPLANT_H
 #define _IMPLANT_H
 
-#define BUFFERSIZE		4096
-#define FRAGMENTSIZE	BUFFERSIZE + 8
+#define STDIN   0
+#define STDOUT  1
+#define STDERR  2
 
 #define TYPE_ALIVE		0
 #define TYPE_COMMAND	1
@@ -13,6 +14,10 @@
 
 #define RET_ERROR	-1
 #define RET_OK		0
+
+#define BUFFERSIZE		4096
+#define FRAGMENTSIZE	BUFFERSIZE + 8
+#define AGENT_TIMEOUT	60
 
 typedef struct First_Payload{
 	int32_t total_size;

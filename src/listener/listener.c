@@ -17,6 +17,7 @@ This is the main file for the listener. It will do the following:
 #include <poll.h>
 #include <stdbool.h>
 #include <signal.h>
+#include <sys/types.h>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -30,68 +31,79 @@ This is the main file for the listener. It will do the following:
 #include "console.h"
 #include "listener_handler.h"
 
-#define FDSIZE			100
 #define LISTEN_BACKLOG	3
-#define BUFFER_SIZE		256
-#define AGENT_TIMEOUT	60
 #define DEFAULT_PORT	55555
 #define CHECK_ALIVE_FREQUENCY	10
 
 // Globals
-// Socket Poll Structure
-implant_poll *poll_struct;
-pthread_mutex_t poll_lock;
+// Agents poll and states
+Connected_Agents *connected_agents;
+pthread_mutex_t agents_lock;
 // Receive Queue
 Queue* listener_receive_queue;
 pthread_mutex_t listener_receive_queue_lock;
 // Send Queue
 Queue* listener_send_queue;
 pthread_mutex_t listener_send_queue_lock;
-// Agent array
-Agent* agents[FDSIZE] = {0}; 
 // Alarm flag
 volatile sig_atomic_t listener_alive_flag = false;
+// SIGINT flag
+volatile sig_atomic_t all_sigint = false;
+volatile sig_atomic_t shell_sigint = false;
+volatile sig_atomic_t shell_flag = false;
+
+void int_handler(int sig){
+    printf("CTRL-c\n");
+    (shell_flag) ? (shell_sigint = true) : (all_sigint = true);
+}
 
 void listener_alive_alarm(int sig){
 	listener_alive_flag = true;
 }
 
-void *check_alive(void *vargp){
+void *check_alive_thread(void *vargp){
 	signal(SIGALRM, listener_alive_alarm);
-	alarm(CHECK_ALIVE_FREQUENCY);
-	for (;;){
+	while (!all_sigint){
+        alarm(CHECK_ALIVE_FREQUENCY);
 		if (listener_alive_flag){
+            pthread_mutex_lock(&agents_lock);
 			for (int i = 0; i < FDSIZE; i++){
-				if (agents[i] && agents[i]->alive + AGENT_TIMEOUT < time(NULL)){
+				if (connected_agents->agents[i].alive && connected_agents->agents[i].alive + AGENT_TIMEOUT < time(NULL)){
 					printf("Agent %d timeout, removing from poll\n", i);
-					close(i);
-					poll_delete(i);
-					free(agents[i]);
-					agents[i] = NULL;
+					agent_delete(i);
 				}
 			}
 			
 			listener_alive_flag = false;
-			alarm(CHECK_ALIVE_FREQUENCY);
+            pthread_mutex_unlock(&agents_lock);
 		}
 	}
-	return 0;	
+    printf("check_alive_thread done\n");
+	return 0;
 }
 
 int start_sockets(int port){
-    int sockfd, new_socket;
+    int retval;
+    int listener_socket, agent_socket;
     int opt = 1;
     struct sockaddr_in addr;
     char *buffer;
     socklen_t addr_len = sizeof(addr);
+    fd_set accept_fds;
+    struct timeval tv;
 
-    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
+    int *fd_count = connected_agents->fd_count;
+	struct pollfd *pfds = connected_agents->pfds;
+
+    if ((listener_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0){
         printf("Socket failed\n");
+        all_sigint = true;
         return RET_ERROR;
     }
 
-    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))){
+    if (setsockopt(listener_socket, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))){
         printf("setsockopt failed\n");
+        all_sigint = true;
         return RET_ERROR;
     }
 
@@ -99,37 +111,50 @@ int start_sockets(int port){
     addr.sin_addr.s_addr = INADDR_ANY;
     addr.sin_port = htons(port);
 
-    if (bind(sockfd, (struct sockaddr*)&addr, sizeof(addr)) < 0){
+    if (bind(listener_socket, (struct sockaddr*)&addr, sizeof(addr)) < 0){
         printf("bind failed\n");
+        all_sigint = true;
         return RET_ERROR;
     }
 
-    if (listen(sockfd, LISTEN_BACKLOG) < 0){
+    if (listen(listener_socket, LISTEN_BACKLOG) < 0){
         printf("listen failed\n");
+        all_sigint = true;
         return RET_ERROR;
     }
 
-    for (;;){
-        if ((new_socket = accept(sockfd, (struct sockaddr*)&addr, &addr_len)) < 0){
-            printf("accept failed\n");
-            return RET_ERROR;
+    while (!all_sigint){
+        
+        // set select options
+        tv.tv_sec = SELECT_TIMEOUT;
+        tv.tv_usec = 0;
+        FD_ZERO(&accept_fds);
+        FD_SET(listener_socket, &accept_fds);
+
+        retval = select(listener_socket + 1, &accept_fds, NULL, NULL, &tv);
+        if (retval == -1){
+            printf("select error\n");
+            all_sigint = true;
         }
-        debug_print("Agent connected %d\n", new_socket);
-        
-        if (new_socket >= FDSIZE){
-			printf("too many connections\n");
-			close(new_socket);
-			continue;
-		}
-        
-        poll_add(new_socket);
-        agents[new_socket] = malloc(sizeof(Agent));
-        memset(agents[new_socket], 0, sizeof(Agent));
-        agents[new_socket]->alive = time(NULL);
-        agents[new_socket]->last_fragment_index = -1;
+        else if (FD_ISSET(listener_socket, &accept_fds)){
+            if ((agent_socket = accept(listener_socket, (struct sockaddr*)&addr, &addr_len)) < 0){
+                printf("accept failed\n");
+                all_sigint = true;
+            }
+            else if (agent_socket >= FDSIZE){
+                print_out("%s\n", "Agent connected but too many connections");
+                close(agent_socket);
+            }
+            else {
+                // add agent to global struct
+                print_out("Agent connected %d\n", agent_socket);
+                agent_add(agent_socket);
+            }
+        }
     }
-    
-    close(sockfd);
+
+    close(listener_socket);
+    printf("listening socket done\n");
     return RET_OK;
 }
 
@@ -137,13 +162,10 @@ int start_sockets(int port){
 int main(int argc, char *argv[]){
     int opt;
     int port = DEFAULT_PORT;
-    pthread_t agent_receive_tid, agent_send_tid, console_tid, message_handler_tid, check_alive_tid;
+    pthread_t listener_receive_tid, listener_send_tid, console_tid, listener_handler_tid, check_alive_tid;
     struct pollfd *pfds;
+    Agent *agents;
     int fd_count = 0;
-    int fd_size = FDSIZE;
-
-    poll_struct = malloc(sizeof(poll_struct));
-    pfds = malloc(sizeof(pfds) * fd_size);
     
     while((opt = getopt(argc, argv, "p:h")) != -1){
         switch(opt){
@@ -162,8 +184,20 @@ int main(int argc, char *argv[]){
         }
     }
     
-    poll_struct->fd_count = &fd_count;
-    poll_struct->pfds = pfds;
+    // set signal hander for SIGINT
+    signal(SIGINT, int_handler);
+
+    // Setup Connected_Agents struct
+    connected_agents = malloc(sizeof(connected_agents));
+    pfds = malloc(sizeof(struct pollfd) * FDSIZE);
+    memset(pfds, 0, sizeof(struct pollfd) * FDSIZE);
+    agents = malloc(sizeof(Agent) * FDSIZE);
+    memset(agents, 0, sizeof(Agent) * FDSIZE);
+    connected_agents->fd_count = &fd_count;
+    connected_agents->pfds = pfds;
+    connected_agents->agents = agents;
+    // create connected_agents mutex
+    pthread_mutex_init(&agents_lock, NULL);
 
     // Create receive queue
     listener_receive_queue = createQueue(QUEUE_SIZE);
@@ -173,17 +207,30 @@ int main(int argc, char *argv[]){
     pthread_mutex_init(&listener_send_queue_lock, NULL);
 
     // Start agent receive thread
-    pthread_create(&agent_receive_tid, NULL, receive_from_agent, NULL);
+    pthread_create(&listener_receive_tid, NULL, listener_receive_thread, NULL);
     // Start agent send thread
-    pthread_create(&agent_send_tid, NULL, send_to_agent, NULL);
+    pthread_create(&listener_send_tid, NULL, listener_send_thread, NULL);
     // Start console thread
-    pthread_create(&console_tid, NULL, console, NULL);
+    pthread_create(&console_tid, NULL, console_thread, NULL);
     // Start message handler thread
-    pthread_create(&message_handler_tid, NULL, handle_message, NULL);
+    pthread_create(&listener_handler_tid, NULL, listener_handler_thread, NULL);
     // Start keep alive thread
-    pthread_create(&check_alive_tid, NULL, check_alive, NULL);
+    pthread_create(&check_alive_tid, NULL, check_alive_thread, NULL);
+
+    // Create agents structure mutex
+    pthread_mutex_init(&agents_lock, NULL);
 
     start_sockets(port);
+    // If we get here, something broke on our listening socket. Close everything.
+    all_sigint = true;
+
+    pthread_join(listener_receive_tid, NULL);
+    pthread_join(listener_send_tid, NULL);
+    pthread_join(console_tid, NULL);
+    pthread_join(listener_handler_tid, NULL);
+    pthread_join(check_alive_tid, NULL);
+
+    printf("%s\n", "closed cleanly");
     return RET_OK;
 }
 #endif /* UNIT_TESTING */

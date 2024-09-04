@@ -15,4 +15,7 @@
 #define debug_print(fmt, ...) do {} while (0)
 #endif /* DEBUG */
 
+#define print_out(fmt, ...) \
+	do { fprintf(stdout, "\n" fmt "\n>", __VA_ARGS__); fflush(stdout); } while (0)
+
 #endif /* _UTILITY_H */
