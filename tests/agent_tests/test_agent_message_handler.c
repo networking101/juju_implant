@@ -76,7 +76,7 @@ static void test_parse_first_fragment_long_message(void **state){
 	Queue_Message q_message = {0};
 	Assembled_Message a_message = {0};
 	
-	memset(fragment.first_payload.actual_payload, 0x41, BUFFERSIZE - 4);
+	memset(fragment.first_payload.actual_payload, 0x41, FIRST_PAYLOAD_SIZE);
 	
 	// Using structures
 	fragment.type = 1;
@@ -156,9 +156,9 @@ static void test_parse_next_fragment_short_message(void **state){
 	Queue_Message q_message = {0};
 	Assembled_Message a_message = {0};
 	
-	char check_complete_message[BUFFERSIZE - 4 + 5 + 1] = {0};
-	memset(check_complete_message, 0x41, BUFFERSIZE - 4);
-	memcpy(check_complete_message + BUFFERSIZE - 4, ALIVE, strlen(ALIVE));
+	char check_complete_message[FIRST_PAYLOAD_SIZE + 5 + 1] = {0};
+	memset(check_complete_message, 0x41, FIRST_PAYLOAD_SIZE);
+	memcpy(check_complete_message + FIRST_PAYLOAD_SIZE, ALIVE, strlen(ALIVE));
 	
 	// Using structures
 	fragment.type = 1;
@@ -172,10 +172,10 @@ static void test_parse_next_fragment_short_message(void **state){
 	
 	a_message.type = 1;
 	a_message.last_fragment_index = 0;
-	a_message.total_message_size = BUFFERSIZE - sizeof(fragment.first_payload.total_size) + strlen(ALIVE);
-	a_message.current_message_size = BUFFERSIZE - sizeof(fragment.first_payload.total_size);
+	a_message.total_message_size = NEXT_PAYLOAD_SIZE - sizeof(fragment.first_payload.total_size) + strlen(ALIVE);
+	a_message.current_message_size = NEXT_PAYLOAD_SIZE - sizeof(fragment.first_payload.total_size);
 	a_message.complete_message = malloc(a_message.total_message_size);
-	memset(a_message.complete_message, 0x41, BUFFERSIZE - 4);
+	memset(a_message.complete_message, 0x41, FIRST_PAYLOAD_SIZE);
 	
 	int retval = parse_next_fragment(&q_message, &a_message);
 	

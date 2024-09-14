@@ -4,4 +4,6 @@ bin/*
 cmocka-1.1.7/*
 !cmocka-1.1.7/.gitkeep
 
+.vscode
+
 **/**.bak

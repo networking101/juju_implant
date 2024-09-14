@@ -12,10 +12,6 @@ typedef struct Assembled_Message{
 	char* complete_message;
 } Assembled_Message;
 
-STATIC int parse_first_fragment(Queue_Message*, Assembled_Message*);
-
-STATIC int parse_next_fragment(Queue_Message*, Assembled_Message*);
-
 void* agent_handle_message(void*);
 
 int agent_prepare_message(int, char*, int);

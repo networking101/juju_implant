@@ -32,6 +32,8 @@ typedef struct Queue_Message{
 
 Queue* createQueue(unsigned);
 
+void destroyQueue(Queue*);
+
 int isFull(Queue*);
 
 int isEmpty(Queue*);

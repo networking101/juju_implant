@@ -23,12 +23,8 @@ extern pthread_mutex_t agent_send_queue_lock;
 void *agent_receive(void *vargp){
 	int *sockfd = (int*)vargp;
 	Fragment fragment;
-	char* buffer;
 	
-	for (;;){
-		uint message_size = 0;
-		uint bytes_received = 0;
-		
+	for (;;){		
 		// get first chunk which contains total message size
 		int nbytes = recv(*sockfd, (void*)&fragment, sizeof(Fragment), 0);
 		if (nbytes <= 0){

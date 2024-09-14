@@ -16,8 +16,9 @@ make
 
 
 ### TODO
-add message type for diagnostic messages
-create landing function for each thread
-fix defines for fragment sizes
-put file
-get file
+add message type for diagnostic messages  
+create landing function for each thread and use global variable to close all threads on sigint  
+put file  
+get file  
+handle more than FDSIZE agents  
+encrypted comms  

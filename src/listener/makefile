@@ -2,7 +2,7 @@ CC				:= gcc
 INC				:=-I../../include -I../../include/listener
 SRC				:=$(wildcard ../*.c) $(wildcard *.c)
 
-FLAGS			:=-lpthread
+FLAGS			:=-lpthread -Wall
 
 all: ../../bin/listener
 

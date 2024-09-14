@@ -33,7 +33,7 @@ STATIC int execute_shell(){
 	Shell_Pipes shell_pipes = {0};
 	Queue_Message* message;
 	int nbytes = 0;
-	char buf[BUFFERSIZE];
+	char buf[FIRST_PAYLOAD_SIZE];
 	char* buffer;
 	int ret_val = RET_OK;
 	
@@ -89,7 +89,7 @@ STATIC int execute_shell(){
 		// if still running, dequeue messages and send to shell
 		// if child was killed, we need to start another child process
 		while (!(waitpid(pid, NULL, WNOHANG))){
-			if (message = dequeue(shell_send_queue, &shell_send_queue_lock)){
+			if ((message = dequeue(shell_send_queue, &shell_send_queue_lock))){
 				debug_print("dequeued message for shell: %s, %d\n", message->buffer, message->size);
 				if ((nbytes = write(shell_pipes.pipes[STDIN].pipefd[PIPE_IN], message->buffer, message->size)) == -1){
 					printf("ERROR write to shell\n");
@@ -102,7 +102,7 @@ STATIC int execute_shell(){
 			}
 			
 			// Read from STDOUT
-			nbytes = read(shell_pipes.pipes[STDOUT].pipefd[PIPE_OUT], buf, BUFFERSIZE - 4);
+			nbytes = read(shell_pipes.pipes[STDOUT].pipefd[PIPE_OUT], buf, FIRST_PAYLOAD_SIZE);
 			if (nbytes == -1){
 				if (errno != EAGAIN){				// EAGAIN means pipe is empty and no error
 					printf("ERROR STDOUT read from shell: %d\n", errno);
@@ -123,10 +123,10 @@ STATIC int execute_shell(){
 					printf("ERROR agent_prepare_message error\n");
 				}
 			}
-			memset(buf, 0, BUFFERSIZE);
+			memset(buf, 0, FIRST_PAYLOAD_SIZE);
 			
 			// Read from STDERR
-			nbytes = read(shell_pipes.pipes[STDERR].pipefd[PIPE_OUT], buf, BUFFERSIZE);
+			nbytes = read(shell_pipes.pipes[STDERR].pipefd[PIPE_OUT], buf, FIRST_PAYLOAD_SIZE);
 			if (nbytes == -1){
 				if (errno != EAGAIN){				// EAGAIN means pipe is empty and no error
 					printf("ERROR STDERR read from shell: %d\n", errno);
@@ -140,7 +140,7 @@ STATIC int execute_shell(){
 			else{
 				printf("DEBUG STDERR: %s\n", buf);
 			}
-			memset(buf, 0, BUFFERSIZE);
+			memset(buf, 0, FIRST_PAYLOAD_SIZE);
 		}
 		
 		close(shell_pipes.pipes[STDIN].pipefd[PIPE_IN]);							// close input of STDIN

@@ -109,7 +109,7 @@ int agent_handle_message_fragment(Assembled_Message* a_message){
 	int ret_val = RET_OK;
 	Queue_Message* q_message;
 
-	if (q_message = dequeue(agent_receive_queue, &agent_receive_queue_lock)){
+	if ((q_message = dequeue(agent_receive_queue, &agent_receive_queue_lock))){
 		debug_print("dequeued message %d\n", q_message->size);
 		
 		if (a_message->last_fragment_index == -1){
@@ -179,7 +179,6 @@ int agent_prepare_message(int type, char* buffer, int message_size){
 	Queue_Message* q_message;
 	Fragment* fragment;
 	int bytes_sent = 0;
-	char* buf;
 	int index = 0;
 	
 	// prepare first fragment with size in first 4 bytes
@@ -189,7 +188,7 @@ int agent_prepare_message(int type, char* buffer, int message_size){
 	fragment->index = htonl(index++);
 	fragment->first_payload.total_size = htonl(message_size);
 	
-	bytes_sent = message_size < (BUFFERSIZE - 4) ? message_size : BUFFERSIZE - 4;
+	bytes_sent = message_size < FIRST_PAYLOAD_SIZE ? message_size : FIRST_PAYLOAD_SIZE;
 	memcpy(fragment->first_payload.actual_payload, buffer, bytes_sent);
 	
 	q_message = malloc(sizeof(Queue_Message));
@@ -206,7 +205,7 @@ int agent_prepare_message(int type, char* buffer, int message_size){
 		fragment->type = htonl(type);
 		fragment->index = htonl(index++);
 		
-		int num_fragment_bytes = (message_size - bytes_sent) < BUFFERSIZE ? (message_size - bytes_sent) : BUFFERSIZE;
+		int num_fragment_bytes = (message_size - bytes_sent) < NEXT_PAYLOAD_SIZE ? (message_size - bytes_sent) : NEXT_PAYLOAD_SIZE;
 		memcpy(fragment->next_payload, buffer + bytes_sent, num_fragment_bytes);
 		
 		q_message = malloc(sizeof(Queue_Message));
