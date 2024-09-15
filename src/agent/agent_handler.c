@@ -42,7 +42,7 @@ STATIC int agent_handle_get_file(Assembled_Message* a_message){
 	return 0;
 }
 
-STATIC int parse_first_fragment(Queue_Message* q_message, Assembled_Message* a_message){
+STATIC int agent_parse_first_fragment(Queue_Message* q_message, Assembled_Message* a_message){
 	Fragment* fragment = q_message->fragment;
 	debug_print("Fragment: %d, %d, %d, %s\n", ntohl(fragment->type), ntohl(fragment->index), ntohl(fragment->first_payload.total_size), fragment->first_payload.actual_payload);
 	
@@ -79,7 +79,7 @@ STATIC int parse_first_fragment(Queue_Message* q_message, Assembled_Message* a_m
 	return RET_OK;
 }
 
-STATIC int parse_next_fragment(Queue_Message* q_message, Assembled_Message* a_message){
+STATIC int agent_parse_next_fragment(Queue_Message* q_message, Assembled_Message* a_message){
 	Fragment* fragment = q_message->fragment;
 	
 	// check if we are receiving the next expected index of a message
@@ -114,13 +114,13 @@ int agent_handle_message_fragment(Assembled_Message* a_message){
 		
 		if (a_message->last_fragment_index == -1){
 		
-			int retval = parse_first_fragment(q_message, a_message);
+			int retval = agent_parse_first_fragment(q_message, a_message);
 			if (retval != RET_OK){
 				debug_print("%s\n", "first message out of order");
 			}
 		}
 		else{
-			int retval = parse_next_fragment(q_message, a_message);
+			int retval = agent_parse_next_fragment(q_message, a_message);
 			if (retval != RET_OK){
 				a_message->last_fragment_index = -1;
 				debug_print("%s\n", "next message out of order");

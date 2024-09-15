@@ -66,14 +66,15 @@ STATIC int listener_receive(Connected_Agents* CA){
 					debug_print("received fragment: type: %d, index: %d, size: %d\n", ntohl(fragment.type), ntohl(fragment.index), nbytes);		
 					
 					Queue_Message* message = malloc(sizeof(message));
-					message->fragment = malloc(nbytes);
+					message->fragment = malloc(sizeof(fragment));
 					message->id = pfds[i].fd;
 					message->size = nbytes;
-					memset(message->fragment, 0, nbytes);
+					memset(message->fragment, 0, sizeof(fragment));
 					memcpy(message->fragment, &fragment, nbytes);
 					
 					debug_print("adding message to queue: id: %d, size: %d\n", message->id, message->size);
 					enqueue(listener_receive_queue, &listener_receive_queue_lock, message);
+					memset(&fragment, 0, sizeof(fragment));
 				}
 			}
 		}
