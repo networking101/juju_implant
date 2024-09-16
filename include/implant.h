@@ -10,10 +10,10 @@
 
 #define TYPE_ALIVE			0
 #define TYPE_COMMAND		1
-#define TYPE_PUT_FILE		2
-#define TYPE_PUT_FILE_NAME	3
-#define TYPE_GET_FILE		4
-#define TYPE_GET_FILE_NAME	5
+#define TYPE_PUT_FILE_NAME	2
+#define TYPE_PUT_FILE		3
+#define TYPE_GET_FILE_NAME	4
+#define TYPE_GET_FILE		5
 
 #define RET_ERROR	-1
 #define RET_OK		0

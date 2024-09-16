@@ -117,6 +117,10 @@ STATIC int put_file_command(int agent_fd){
 		printf("ERROR fgets\n");
 		return RET_ERROR;
 	}
+
+	// take newline off
+	buf[strcspn(buf, "\n")] = 0;
+
 	if (access(buf, F_OK) != 0){
 		printf("%s\n", buf);
 		printf("File doesn't exist\n");
@@ -136,6 +140,7 @@ STATIC int put_file_command(int agent_fd){
 		printf("ERROR ftell\n");
 		return RET_ERROR;
 	}
+	rewind(file_fd);
 
 	file_buffer = malloc(file_size);
 
@@ -152,6 +157,9 @@ STATIC int put_file_command(int agent_fd){
 		printf("fgets error\n");
 		return RET_ERROR;
 	}
+
+	// take newline off
+	buf[strcspn(buf, "\n")] = 0;
 
 	file_name_size = strlen(buf);
 	file_name_buffer = malloc(file_name_size);
@@ -223,7 +231,6 @@ STATIC int agent_console(int agent_fd){
 	
 	return 0;
 }
-
 
 void *console_thread(void *vargp){
 	Connected_Agents* CA = vargp;

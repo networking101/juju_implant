@@ -170,6 +170,7 @@ int listener_prepare_message(int sockfd, int type, char* message, int message_si
 		memset(q_message, 0, sizeof(Queue_Message));
 		q_message->id = sockfd;
 		q_message->size = sizeof(fragment->type) + sizeof(fragment->index) + num_fragment_bytes;
+		q_message->fragment = fragment;
 
 		enqueue(listener_send_queue, &listener_send_queue_lock, q_message);
 		

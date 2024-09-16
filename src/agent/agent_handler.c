@@ -91,6 +91,7 @@ STATIC int agent_handle_get_file(Assembled_Message* a_message){
 		printf("ERROR ftell\n");
 		return RET_ERROR;
 	}
+	rewind(file_fd);
 
 	file_buffer = malloc(file_size);
 
@@ -146,7 +147,7 @@ STATIC int agent_parse_first_fragment(Queue_Message* q_message, Assembled_Messag
 	// record current size of message
 	a_message->current_message_size = this_payload_size;
 	
-	debug_print("first message:\t total_size: %d, current_message_size: %d, type: %d\n", a_message->total_message_size, a_message->current_message_size, a_message->type);
+	debug_print("first message: total_size: %d, current_message_size: %d, type: %d\n", a_message->total_message_size, a_message->current_message_size, a_message->type);
 	
 	free(q_message->fragment);
 	free(q_message);
@@ -183,7 +184,7 @@ int agent_handle_message_fragment(Assembled_Message* a_message){
 	Queue_Message* q_message;
 
 	if ((q_message = dequeue(agent_receive_queue, &agent_receive_queue_lock))){
-		debug_print("dequeued message %d\n", q_message->size);
+		debug_print("dequeued message size: %d\n", q_message->size);
 		
 		if (a_message->last_fragment_index == -1){
 		

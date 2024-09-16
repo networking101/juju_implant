@@ -88,6 +88,14 @@ STATIC int listener_send(){
 	Queue_Message* message;
 
 	if (!(message = dequeue(listener_send_queue, &listener_send_queue_lock))) return RET_OK;
+
+	if (ntohl(message->fragment->index) == 0){
+		debug_print("sending fragment: type: %d, index: %d, size: %d\n", ntohl(message->fragment->type), ntohl(message->fragment->index), ntohl(message->fragment->first_payload.total_size));
+	}
+	else{
+		debug_print("sending fragment: type: %d, index: %d\n", ntohl(message->fragment->type), ntohl(message->fragment->index));
+	}
+	
 	
 	int nbytes = send(message->id, message->fragment, message->size, 0);
 	if (nbytes != message->size){
