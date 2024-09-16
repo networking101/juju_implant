@@ -38,10 +38,10 @@ void *agent_receive(void *vargp){
 		}
 		
 		if (ntohl(fragment.index) == 0){
-			debug_print("received fragment: type: %d, index: %d, size: %d, payload: %s\n", ntohl(fragment.type), ntohl(fragment.index), nbytes, fragment.first_payload.actual_payload);
+			debug_print("received fragment 0: type: %d, index: %d, size: %d, payload: %s\n", ntohl(fragment.type), ntohl(fragment.index), nbytes, fragment.first_payload.actual_payload);
 		}
 		else{
-			debug_print("received fragment: type: %d, index: %d, size: %d, payload: %s\n", ntohl(fragment.type), ntohl(fragment.index), nbytes, fragment.next_payload);
+			debug_print("received fragment n: type: %d, index: %d, size: %d, payload: %s\n", ntohl(fragment.type), ntohl(fragment.index), nbytes, fragment.next_payload);
 		}
 		
 		Queue_Message* message = malloc(sizeof(message));
