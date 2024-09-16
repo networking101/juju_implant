@@ -1,6 +1,8 @@
 # juju_implant
 implant written in C
 
+## dependencies
+sudo apt-get install gcc-multilib
 
 ## install cmocka
 
@@ -12,7 +14,6 @@ cd build
 cmake ..
 make
 ```
-
 
 
 ### TODO

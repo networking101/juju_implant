@@ -84,25 +84,84 @@ STATIC int shell_console(int agent_fd){
 	return RET_OK;
 }
 
-STATIC int put_file_command(){
+STATIC int get_file_command(int agent_fd){
 	char buf[FIRST_PAYLOAD_SIZE];
+	int file_name_size;
+	char* file_name_buffer;
+
+	print_out("%s\n", "File name");
+	if (!fgets(buf, FIRST_PAYLOAD_SIZE, stdin)){
+		printf("ERROR fgets\n");
+		return RET_ERROR;
+	}
+
+	file_name_size = strlen(buf);
+	file_name_buffer = malloc(file_name_size);
+	memcpy(file_name_buffer, buf, file_name_size);
+
+	listener_prepare_message(agent_fd, TYPE_GET_FILE_NAME, file_name_buffer, file_name_size);
+
+	debug_print("Get file: %s\n", file_name_buffer);
+
+	return RET_OK;
+}
+
+STATIC int put_file_command(int agent_fd){
+	char buf[FIRST_PAYLOAD_SIZE];
+	FILE* file_fd;
+	int file_size, file_name_size, bytes_read;
+	char *file_buffer, *file_name_buffer;
 
 	print_out("%s\n", "Source file");
 	if (!fgets(buf, FIRST_PAYLOAD_SIZE, stdin)){
-		printf("fgets error\n");
-		all_sigint = true;
+		printf("ERROR fgets\n");
 		return RET_ERROR;
 	}
-	if (access(buf, F_OK)){
+	if (access(buf, F_OK) != 0){
+		printf("%s\n", buf);
 		printf("File doesn't exist\n");
 		return RET_OK;
 	}
+
+	if ((file_fd = fopen(buf, "r")) == 0){
+		printf("ERROR file open\n");
+		return RET_ERROR;
+	}
+
+	if (fseek(file_fd, 0L, SEEK_END) == -1){
+		printf("ERROR fseek\n");
+		return RET_ERROR;
+	}
+	if ((file_size = ftell(file_fd)) == -1){
+		printf("ERROR ftell\n");
+		return RET_ERROR;
+	}
+
+	file_buffer = malloc(file_size);
+
+	bytes_read = fread(file_buffer, 1, file_size, file_fd);
+	if (bytes_read != file_size || ferror(file_fd)){
+		printf("ERROR fread\n");
+		return RET_ERROR;
+	}
+	
+	fclose(file_fd);
+
 	print_out("%s\n", "Destination file (default is current directory)");
 	if (!fgets(buf, FIRST_PAYLOAD_SIZE, stdin)){
 		printf("fgets error\n");
-		all_sigint = true;
 		return RET_ERROR;
 	}
+
+	file_name_size = strlen(buf);
+	file_name_buffer = malloc(file_name_size);
+	memcpy(file_name_buffer, buf, file_name_size);
+
+	listener_prepare_message(agent_fd, TYPE_PUT_FILE_NAME, file_name_buffer, file_name_size);
+	listener_prepare_message(agent_fd, TYPE_PUT_FILE, file_buffer, file_size);
+
+	debug_print("Put file: %s, size: %d\n", file_name_buffer, file_size);
+
 	return RET_OK;
 }
 
@@ -141,11 +200,14 @@ STATIC int agent_console(int agent_fd){
 					}
 					break;
 				case 2:
-					if (put_file_command() != RET_OK){
+					if (put_file_command(agent_fd) != RET_OK){
 						return RET_ERROR;
 					}
 					break;
 				case 3:
+					if (get_file_command(agent_fd) != RET_OK){
+						return RET_ERROR;
+					}
 					break;
 				case 4:
 					break;

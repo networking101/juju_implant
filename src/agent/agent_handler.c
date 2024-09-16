@@ -38,12 +38,82 @@ STATIC int agent_handle_command(Assembled_Message* a_message){
 	return 0;
 }
 
+STATIC int agent_handle_put_file_name(Assembled_Message* a_message){
+
+	a_message->file_name = a_message->complete_message;
+
+	debug_print("Put file name: %s\n", a_message->file_name);
+
+	return RET_OK;
+}
+
 STATIC int agent_handle_put_file(Assembled_Message* a_message){
-	return 0;
+	FILE* file_fd;
+
+	if ((file_fd = fopen(a_message->file_name, "w")) == 0){
+		printf("ERROR file open\n");
+		return RET_ERROR;
+	}
+
+	if (fwrite(a_message->complete_message, 1, a_message->total_message_size, file_fd) < a_message->total_message_size){
+		printf("ERROR fwrite\n");
+		return RET_ERROR;
+	}
+
+	debug_print("Put file: %s, size: %d\n", a_message->file_name, a_message->total_message_size);
+
+	free(a_message->complete_message);
+	free(a_message->file_name);
+
+	return RET_OK;
 }
 
 STATIC int agent_handle_get_file(Assembled_Message* a_message){
-	return 0;
+	FILE* file_fd;
+	int file_size, bytes_read;
+	char *file_buffer;
+
+	if (access(a_message->complete_message, F_OK)){
+		debug_print("%s\n", "File doesn't exist");
+		//TODO send status message
+	}
+
+	if ((file_fd = fopen(a_message->complete_message, "r")) == 0){
+		printf("ERROR file open\n");
+		return RET_ERROR;
+	}
+
+	if (fseek(file_fd, 0L, SEEK_END) == -1){
+		printf("ERROR fseek\n");
+		return RET_ERROR;
+	}
+	if ((file_size = ftell(file_fd)) == -1){
+		printf("ERROR ftell\n");
+		return RET_ERROR;
+	}
+
+	file_buffer = malloc(file_size);
+
+	bytes_read = fread(file_buffer, 1, file_size, file_fd);
+	if (bytes_read != file_size || ferror(file_fd)){
+		printf("ERROR fread\n");
+		return RET_ERROR;
+	}
+	
+	fclose(file_fd);
+
+
+
+	// file_name_size = strlen(buf);
+	// file_name_buffer = malloc(file_name_size);
+	// memcpy(file_name_buffer, buf, file_name_size);
+
+	agent_prepare_message(TYPE_GET_FILE_NAME, a_message->complete_message, a_message->total_message_size);
+	agent_prepare_message(TYPE_GET_FILE, file_buffer, file_size);
+
+	debug_print("Get file: %s, size: %d\n", a_message->complete_message, file_size);
+
+	return RET_OK;
 }
 
 STATIC int agent_parse_first_fragment(Queue_Message* q_message, Assembled_Message* a_message){
@@ -108,7 +178,6 @@ STATIC int agent_parse_next_fragment(Queue_Message* q_message, Assembled_Message
 	return RET_OK;
 }
 
-
 int agent_handle_message_fragment(Assembled_Message* a_message){
 	int ret_val = RET_OK;
 	Queue_Message* q_message;
@@ -138,18 +207,20 @@ int agent_handle_message_fragment(Assembled_Message* a_message){
 int agent_handle_complete_message(Assembled_Message* a_message){
 	int ret_val = RET_OK;
 
-	if (a_message->type == TYPE_PUT_FILE){
-		agent_handle_put_file(a_message);
-	}
-	// check if we received all fragments
-	else if (a_message->last_fragment_index != -1 && a_message->total_message_size == a_message->current_message_size){
+	if (a_message->last_fragment_index != -1 && a_message->total_message_size == a_message->current_message_size){
 		debug_print("received full message %d, %d, %s\n", a_message->type, a_message->total_message_size, a_message->complete_message);
 		a_message->last_fragment_index = -1;
 		if (a_message->type == TYPE_COMMAND){
 			agent_handle_command(a_message);
 		}
-		else if (a_message->type == TYPE_GET_FILE){
+		else if (a_message->type == TYPE_GET_FILE_NAME){
 			agent_handle_get_file(a_message);
+		}
+		else if (a_message->type == TYPE_PUT_FILE_NAME){
+			agent_handle_put_file_name(a_message);
+		}
+		else if (a_message->type == TYPE_PUT_FILE){
+			agent_handle_put_file(a_message);
 		}
 		else{
 			printf("ERROR unknown fragment type\n");

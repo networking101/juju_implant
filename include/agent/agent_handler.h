@@ -9,6 +9,7 @@ typedef struct Assembled_Message{
 	int last_fragment_index;
 	int total_message_size;
 	int current_message_size;
+	char* file_name;
 	char* complete_message;
 } Assembled_Message;
 
