@@ -36,6 +36,8 @@ pthread_mutex_t shell_send_queue_lock;
 time_t start_time;
 // Alarm flag
 volatile sig_atomic_t agent_alive_flag = false;
+// SIGINT flags
+volatile sig_atomic_t agent_close_flag = false;
 
 void agent_alive_alarm(int sig){
 	agent_alive_flag = true;
@@ -77,7 +79,7 @@ int connect_to_listener(char* ip_addr, int port){
     int sockfd;
     int status;
     struct sockaddr_in addr;
-    pthread_t agent_receive_tid, agent_send_tid, agent_message_handler_tid, keep_alive_tid, shell_tid;
+    pthread_t agent_receive_tid, agent_send_tid, agent_handler_tid, keep_alive_tid, shell_tid;
 
     if (ip_addr == NULL || !port){
         printf("Bad IP or port\n");
@@ -107,7 +109,7 @@ int connect_to_listener(char* ip_addr, int port){
     // Start agent send thread
     pthread_create(&agent_send_tid, NULL, agent_send, &sockfd);
     // Start agent message handler thread
-    pthread_create(&agent_message_handler_tid, NULL, agent_handle_message, &sockfd);
+    pthread_create(&agent_handler_tid, NULL, agent_handler_thread, &sockfd);
     // Start keep alive thread
     pthread_create(&keep_alive_tid, NULL, keep_alive, NULL);
     // Start shell thread
@@ -117,7 +119,7 @@ int connect_to_listener(char* ip_addr, int port){
     
     pthread_join(agent_receive_tid, NULL);
     pthread_join(agent_send_tid, NULL);
-    pthread_join(agent_message_handler_tid, NULL);
+    pthread_join(agent_handler_tid, NULL);
     pthread_join(keep_alive_tid, NULL);
     pthread_join(shell_tid, NULL);
 

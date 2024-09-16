@@ -8,6 +8,7 @@ It will pass commands to the message handler and receive responses from the mess
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
 #include <pthread.h>
 #include <poll.h>
@@ -83,6 +84,28 @@ STATIC int shell_console(int agent_fd){
 	return RET_OK;
 }
 
+STATIC int put_file_command(){
+	char buf[FIRST_PAYLOAD_SIZE];
+
+	print_out("%s\n", "Source file");
+	if (!fgets(buf, FIRST_PAYLOAD_SIZE, stdin)){
+		printf("fgets error\n");
+		all_sigint = true;
+		return RET_ERROR;
+	}
+	if (access(buf, F_OK)){
+		printf("File doesn't exist\n");
+		return RET_OK;
+	}
+	print_out("%s\n", "Destination file (default is current directory)");
+	if (!fgets(buf, FIRST_PAYLOAD_SIZE, stdin)){
+		printf("fgets error\n");
+		all_sigint = true;
+		return RET_ERROR;
+	}
+	return RET_OK;
+}
+
 STATIC int agent_console(int agent_fd){
 	int retval;
 	char opt_buf[FIRST_PAYLOAD_SIZE];
@@ -113,9 +136,14 @@ STATIC int agent_console(int agent_fd){
 			option = strtol(opt_buf, NULL, 10);
 			switch(option){
 				case 1:
-					shell_console(agent_fd);
+					if (shell_console(agent_fd) != RET_OK){
+						return RET_ERROR;
+					}
 					break;
 				case 2:
+					if (put_file_command() != RET_OK){
+						return RET_ERROR;
+					}
 					break;
 				case 3:
 					break;

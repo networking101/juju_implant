@@ -22,3 +22,6 @@ put file
 get file  
 handle more than FDSIZE agents  
 encrypted comms  
+handle newlines from shell response fragments  
+figure out consistent return variables in functions (ret_val)  
+message checksum  

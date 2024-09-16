@@ -74,6 +74,20 @@ STATIC int listener_parse_next_fragment(Connected_Agents* CA, Queue_Message* q_m
 	return RET_OK;
 }
 
+STATIC int listener_handle_complete_message(Agent* agent){
+	int ret_val = RET_OK;
+	
+	// check if we received all fragments
+	if (agent->last_fragment_index != -1 && agent->total_message_size == agent->current_message_size){
+		printf("Do something with completed message:\n%s\n", agent->message);
+		agent->last_fragment_index = -1;
+		free(agent->message);
+		agent->message = NULL;
+	}
+
+	return ret_val;
+}
+
 STATIC int handle_message(Connected_Agents* CA){
 	Queue_Message* message;
 	Fragment* fragment;
@@ -107,14 +121,12 @@ STATIC int handle_message(Connected_Agents* CA){
 			CA->agents[message->id].last_fragment_index = -1;
 		}
 		
-		// check if we received all fragments
-		if (CA->agents[message->id].total_message_size == CA->agents[message->id].current_message_size){
-			printf("Do something with completed message:\n%s\n", CA->agents[message->id].message);
-			CA->agents[message->id].last_fragment_index = -1;
-			free(CA->agents[message->id].message);
-			CA->agents[message->id].message = NULL;
+		if (listener_handle_complete_message(&CA->agents[message->id]) != RET_OK){
+			printf("ERROR agent_handle_complete_message\n");
+			return RET_ERROR;
 		}
 	}
+	
 	pthread_mutex_unlock(&CA->lock);
 	free(message->fragment);
 	free(message);
