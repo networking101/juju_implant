@@ -90,10 +90,10 @@ STATIC int listener_send(){
 	if (!(message = dequeue(listener_send_queue, &listener_send_queue_lock))) return RET_OK;
 
 	if (ntohl(message->fragment->index) == 0){
-		debug_print("sending fragment: type: %d, index: %d, size: %d\n", ntohl(message->fragment->type), ntohl(message->fragment->index), ntohl(message->fragment->first_payload.total_size));
+		debug_print("sending fragment: type: %d, index: %d, total size: %d, size: %d, payload: %s\n", ntohl(message->fragment->type), ntohl(message->fragment->index), ntohl(message->fragment->first_payload.total_size), message->size, message->fragment->first_payload.actual_payload);
 	}
 	else{
-		debug_print("sending fragment: type: %d, index: %d\n", ntohl(message->fragment->type), ntohl(message->fragment->index));
+		debug_print("sending fragment: type: %d, index: %d, size: %d, payload: %s\n", ntohl(message->fragment->type), ntohl(message->fragment->index), message->size, message->fragment->next_payload);
 	}
 	
 	

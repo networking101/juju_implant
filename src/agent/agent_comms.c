@@ -26,15 +26,18 @@ void *agent_receive(void *vargp){
 	
 	for (;;){		
 		// get first chunk which contains total message size
-		int nbytes = recv(*sockfd, (void*)&fragment, sizeof(Fragment), 0);
+		printf("size of fragment: %d\n", sizeof(Fragment));
+		int nbytes = recv(*sockfd, (void*)&fragment, FRAGMENT_SIZE, 0);
+		printf("Nbytes: %d\n", nbytes);
 		if (nbytes <= 0){
 			if (nbytes == 0){
 				debug_print("%s\n", "connection closed");
+				exit(RET_OK);
 			}
 			else {
 				printf("recv error\n");
+				exit(RET_ERROR); 
 			}
-			exit(-1);
 		}
 		
 		if (ntohl(fragment.index) == 0){
