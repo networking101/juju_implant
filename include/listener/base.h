@@ -10,6 +10,7 @@ typedef struct Agent{
 	int last_fragment_index;
 	int total_message_size;
 	int current_message_size;
+	int next_recv_size;
 	char* message;
 } Agent;
 

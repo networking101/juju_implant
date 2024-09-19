@@ -50,8 +50,7 @@ STATIC int listener_receive(Connected_Agents* CA){
 			// check if ready to read
 			if (pfds[i].revents & POLLIN){
 				debug_print("POLLIN  %d\n", pfds[i].fd);
-				int nbytes = recv(pfds[i].fd, (void*)&fragment, sizeof(Fragment), 0);
-				
+				int nbytes = recv(pfds[i].fd, (void*)&fragment, CA->agents[pfds[i].fd].next_recv_size + INITIAL_SIZE, 0);
 				if (nbytes == 0){
 					// close file descriptor and remove from poll array
 					printf("%s\n", "connection closed");
@@ -63,7 +62,10 @@ STATIC int listener_receive(Connected_Agents* CA){
 					return RET_ERROR;
 				}
 				else{
-					debug_print("received fragment: type: %d, index: %d, size: %d\n", ntohl(fragment.type), ntohl(fragment.index), nbytes);		
+					debug_print("received fragment: type: %d, index: %d, total_size: %d, next_size: %d\n", ntohl(fragment.type), ntohl(fragment.index), ntohl(fragment.total_size), ntohl(fragment.next_size));
+
+					// update next read size
+					CA->agents[pfds[i].fd].next_recv_size = fragment.next_size;
 					
 					Queue_Message* message = malloc(sizeof(message));
 					message->fragment = malloc(sizeof(fragment));
@@ -84,21 +86,29 @@ STATIC int listener_receive(Connected_Agents* CA){
     return RET_OK;
 }
 
+STATIC int sendall(int fd, char *buf, int len){
+    int total = 0;
+    int bytesleft = len;
+    int n;
+
+    while(total < len) {
+        n = send(s, buf+total, bytesleft, 0);
+        if (n == RET_ERROR) { break; }
+        total += n;
+        bytesleft -= n;
+    }
+
+    return (n == RET_ERROR) ? RET_ERROR : RET_OK;
+} 
+
 STATIC int listener_send(){
 	Queue_Message* message;
 
 	if (!(message = dequeue(listener_send_queue, &listener_send_queue_lock))) return RET_OK;
 
-	if (ntohl(message->fragment->index) == 0){
-		debug_print("sending fragment: type: %d, index: %d, total size: %d, size: %d, payload: %s\n", ntohl(message->fragment->type), ntohl(message->fragment->index), ntohl(message->fragment->first_payload.total_size), message->size, message->fragment->first_payload.actual_payload);
-	}
-	else{
-		debug_print("sending fragment: type: %d, index: %d, size: %d, payload: %s\n", ntohl(message->fragment->type), ntohl(message->fragment->index), message->size, message->fragment->next_payload);
-	}
+	debug_print("sending fragment: type: %d, index: %d, total_size: %d, next_size: %d\n", ntohl(message->fragment->type), ntohl(message->fragment->index), ntohl(message->fragment->total_size), ntohl(message->fragment->next_size));
 	
-	
-	int nbytes = send(message->id, message->fragment, message->size, 0);
-	if (nbytes != message->size){
+	if (sendall(message->id, message->fragment, message->size, 0) == RET_ERROR){
 		printf("Send error\n");
 		return RET_ERROR;
 	}
@@ -107,7 +117,6 @@ STATIC int listener_send(){
 	free(message);
 	return RET_OK;
 }
-
 
 void *listener_receive_thread(void *vargp){
 	Connected_Agents* CA = vargp;

