@@ -36,47 +36,68 @@ extern pthread_mutex_t listener_send_queue_lock;
 extern volatile sig_atomic_t all_sigint;
 extern volatile sig_atomic_t shell_sigint;
 
+STATIC int listener_handle_command(){
+
+	return RET_OK;
+}
+
+STATIC int listener_handle_get_file(){
+	return RET_OK;
+}
+
 STATIC int listener_parse_first_fragment(Agent* agent, Fragment* fragment, int32_t size){
 
 	// check if this is a first fragment
-	if (fragment->index != 0){
+	if (fragment->header.index != 0){
 		debug_print("Expected first fragment but got: %d\n", ntohl(fragment->type));
+		return RET_ORDER;
+	}
+
+	// check if this fragment contains no data
+	if (size != HEADER_SIZE){
+		debug_print("Expected first fragment size 0 but got: %d\n", size);
 		return RET_ORDER;
 	}
 
 	debug_print("Handling first fragment: type: %d\n", ntohl(fragment->type));
 
-	// get payload size
-	agent.total_message_size = ntohl(fragment->first_payload.total_size);
+	// save fragment to agent struct
+	memcpy(&agent->last_header, fragment, HEADER_SIZE);
 	
-	// set last fragment index
-	CA->agents[q_message->id].last_fragment_index = 0;
-	
-	// allocate memory and null
-	CA->agents[q_message->id].message = malloc(CA->agents[q_message->id].total_message_size + 1);
-	memset(CA->agents[q_message->id].message, 0, CA->agents[q_message->id].total_message_size + 1);
-	
-	int this_payload_size = q_message->size - sizeof(fragment->type) - sizeof(fragment->index) - sizeof(fragment->first_payload.total_size);
-	
-	// copy payload (not including total message size) to message buffer
-	memcpy(CA->agents[q_message->id].message, fragment->first_payload.actual_payload, this_payload_size);
+	// allocate memory for total message
+	agent->message = calloc(1, fragment->header.total_size);
 	
 	// record current size of message
-	CA->agents[q_message->id].current_message_size = this_payload_size;
-	debug_print("agents[q_message->id]->current_message_size: %d\n", CA->agents[q_message->id].current_message_size);
+	agent->current_message_size = 0;
+
 	return RET_OK;
 }
 
-STATIC int listener_parse_next_fragment(Connected_Agents* CA, Queue_Message* q_message){
-	Fragment* fragment = q_message->fragment;
+STATIC int listener_parse_next_fragment(Agent* agent, Fragment* fragment, int size){
 
-	int this_payload_size = q_message->size - sizeof(fragment->type) - sizeof(fragment->index);
+	// check if this fragment matches the next expected sized
+	if (size - HEADER_SIZE != agent->last_header.next_size){
+		debug_print("Expected fragment size: %d, but got: %d\n", size - HEADER_SIZE, agent->last_header.next_size);
+		return RET_ORDER;
+	}
+
+	// check if type, checksum, and index match
+	if (fragment->header.type != agent->last_header.type || \
+		fragment->header.checksum != agent->last_header.checksum || \
+		fragment->header.index != agent->last_header.index + 1){
+		debug_print("Unexpected fragment: type: %d, checksum: %d, index: %d\n", fragment->header.type, fragment->header.checksum, fragment->header.index);
+		return RET_ORDER;
+	}
 	
 	// copy payload to end of message buffer
-	memcpy(CA->agents[q_message->id].message, fragment->next_payload, this_payload_size);
+	memcpy(agent->message, fragment->buffer, agent->last_header.next_size);
 	
 	// update current size of message
-	CA->agents[q_message->id].current_message_size += this_payload_size;
+	agent->current_message_size += agent->last_header.next_size;
+
+	// update agent's last header
+	memcpy(&agent->last_header, fragment, HEADER_SIZE);
+
 	return RET_OK;
 }
 
@@ -84,17 +105,30 @@ STATIC int listener_handle_complete_message(Agent* agent){
 	int ret_val = RET_OK;
 	
 	// check if we received all fragments
-	if (agent->last_fragment_index != -1 && agent->total_message_size == agent->current_message_size){
-		printf("Do something with completed message:\n%s\n", agent->message);
-		agent->last_fragment_index = -1;
-		free(agent->message);
-		agent->message = NULL;
+	if (agent->last_header.index == -1 || agent->last_header.total_size != agent->current_message_size){
+		return RET_OK;
+	}
+
+	// check if checksum matches message
+	//TODO
+
+	switch(agent->last_header.type){
+		case TYPE_COMMAND:
+			listener_handle_command();
+			break;
+		case TYPE_GET_FILE:
+			listener_handle_get_file();
+			break;
+		default:
+			printf("ERROR UNKNOWN MESSAGE TYPE: %d\n", agent->last_header.type);
+			return RET_ERROR;
 	}
 
 	return ret_val;
 }
 
 STATIC int listener_handle_message_fragment(Connected_Agents* CA){
+	int retval;
 	Queue_Message* q_message;
 	Fragment* fragment;
 	Agent* agent;
@@ -103,7 +137,7 @@ STATIC int listener_handle_message_fragment(Connected_Agents* CA){
 	debug_print("taking message off queue: id: %d, size: %d\n", q_message->id, q_message->size);
 
 	fragment = q_message->fragment;
-	agent = CA->agents[q_message->id];
+	agent = &CA->agents[q_message->id];
 
 	pthread_mutex_lock(&CA->lock);
 
@@ -115,90 +149,81 @@ STATIC int listener_handle_message_fragment(Connected_Agents* CA){
 	}
 
 	// if type is alive packet, update keep alive parameter
-	if (ntohl(fragment->type) == TYPE_ALIVE){
-		CA->agents[q_message->id].alive = (uint)time(NULL);
+	if (ntohl(fragment->header.type) == TYPE_ALIVE){
+		CA->agents[q_message->id].alive = (unsigned int)time(NULL);
 		pthread_mutex_unlock(&CA->lock);
 		debug_print("Agent %d is alive: %lu seconds\n", q_message->id, (unsigned long)ntohl(fragment->alive_time));
 		return RET_OK;
 	}
 
 	// handle message type other than keep alive
-	if (CA->agents[q_message->id].last_fragment_index == -1){
-		int retval = listener_parse_first_fragment(CA->agents[q_message->id], fragment, q_message->size);
-		if (retval != RET_OK){
-			// debug_print("%s\n", "first message out of order");
-			//TODO
-		}
+	if (CA->agents[q_message->id].last_header.index == -1){
+		int retval = listener_parse_first_fragment(&CA->agents[q_message->id], fragment, q_message->size);
 	}
 	else{
-		int retval = listener_parse_next_fragment(q_message, CA->agents[q_message->id]);
-		if (retval != RET_OK){
-			a_message->last_fragment_index = -1;
-			// debug_print("%s\n", "next message out of order");
-			//TODO
-		}
+		int retval = listener_parse_next_fragment(&CA->agents[q_message->id], fragment, q_message->size);
 	}
-
 	pthread_mutex_unlock(&CA->lock);
 
-	return RET_OK;
+	return retval;
 }
 
 STATIC int listener_handle_message(Connected_Agents* CA){
+	int retval = RET_OK;
 
-	if (listener_handle_message_fragment(CA) != RET_OK){
-		return RET_ERROR;
+	retval = listener_handle_message_fragment(CA);
+
+	if (retval == RET_ORDER){
+		return RET_OK;
 	}
 	
-	if (listener_handle_complete_message(a_message) != RET_OK){
-		return RET_ERROR;
-	}
+	retval = listener_handle_complete_message(CA);
 
-	return RET_OK;
+	return retval;
 }
 
+
+// TODO check next_size math here
 int listener_prepare_message(int sockfd, int type, char* message, int message_size){
 	Queue_Message* q_message;
 	Fragment* fragment;
 	int bytes_sent = 0;
 	int this_size;
-	int next_size;
 	int index = 0;
 
 	// prepare first fragment. Only purpose is to prepare for next fragment size
 	fragment = calloc(1, sizeof(Fragment));
-	fragment->type = htonl(type);
-	fragment->index = htonl(index++);
-	fragment->total_size = htonl(message_size);
-	fragment->checksum = 0							// TODO
+	fragment->header.type = htonl(type);
+	fragment->header.index = htonl(index++);
+	fragment->header.total_size = htonl(message_size);
+	fragment->header.checksum = 0;							// TODO
 	
-	next_size = message_size < PAYLOAD_SIZE ? message_size : PAYLOAD_SIZE;
-	fragment->next_size = next_size;
+	fragment->header.next_size = message_size < PAYLOAD_SIZE ? message_size : PAYLOAD_SIZE;
 	
 	q_message = malloc(sizeof(Queue_Message));
 	q_message->id = sockfd;
-	q_message->size = INITIAL_SIZE;
+	q_message->size = HEADER_SIZE;
 	q_message->fragment = fragment;
 
 	enqueue(listener_send_queue, &listener_send_queue_lock, q_message);
 	
-	while (next_size > 0){
-		this_size = next_size;
+	while (fragment->header.next_size > 0){
+		this_size = fragment->header.next_size;
 
 		// send remaining fragments
 		fragment = calloc(1, sizeof(Fragment));
-		fragment->type = htonl(type);
-		fragment->index = htonl(index++);
-		fragment->total_size = htonl(message_size);
-		fragment->checksum = 0							// TODO
+		fragment->header.type = htonl(type);
+		fragment->header.index = htonl(index++);
+		fragment->header.total_size = htonl(message_size);
+		fragment->header.checksum = 0;							// TODO
 		
 		q_message = malloc(sizeof(Queue_Message));
 		q_message->id = sockfd;
-		q_message->size = INITIAL_SIZE + next_size;
+		q_message->size = HEADER_SIZE + this_size;
 		q_message->fragment = fragment;
 		
-		next_size = (message_size - (bytes_sent + next_size)) < NEXT_PAYLOAD_SIZE ? (message_size - (bytes_sent + next_size)) : NEXT_PAYLOAD_SIZE;
-		memcpy(fragment->buffer, message + bytes_sent, num_fragment_bytes);
+		fragment->header.next_size = (message_size - (bytes_sent + fragment->header.next_size)) < PAYLOAD_SIZE ? (message_size - (bytes_sent + fragment->header.next_size)) : PAYLOAD_SIZE;
+		memcpy(fragment->buffer, message + bytes_sent, this_size);
 
 		enqueue(listener_send_queue, &listener_send_queue_lock, q_message);
 		bytes_sent += this_size;

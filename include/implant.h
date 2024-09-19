@@ -21,15 +21,14 @@
 
 #define FRAGMENT_SIZE		4096
 #define PAYLOAD_SIZE		4076
-#define INITIAL_SIZE		20
+#define HEADER_SIZE			20
 
 #define AGENT_TIMEOUT	60
 
 // macro to return size of structure field
 #define member_size(type, member)	(sizeof( ((type *)0)->member))
 
-
-typedef struct Fragment{
+typedef struct Fragment_Header{
 	int32_t type;						// type of message (0 for alive, 1 for command)
 	int32_t index;						// index of fragment
 	int32_t total_size;					// size of complete message, will be 0 for alive message
@@ -38,15 +37,18 @@ typedef struct Fragment{
 		uint32_t checksum;				// checksum of complete message, not present in alive messages
 		uint32_t alive_time;			// if this is an alive message, include the epoch time of when agent was started on target
 	};
+} Fragment_Header;
+
+
+typedef struct Fragment{
+	Fragment_Header header;
 	char buffer[PAYLOAD_SIZE];			// contents of message
 } Fragment;
 
-// // Make sure that we have the correct payload sizes defined
-// // Check PAYLOAD_SIZE
-// static_assert(FRAGMENT_SIZE == PAYLOAD_SIZE + member_size(Fragment, type) + member_size(Fragment, index) + member_size(Fragment, total_size) + member_size(Fragment, next_size) + member_size(Fragment, checksum));
-// static_assert(FRAGMENT_SIZE == PAYLOAD_SIZE + member_size(Fragment, type) + member_size(Fragment, index) + member_size(Fragment, total_size) + member_size(Fragment, next_size) + member_size(Fragment, alive_time));
-// // Check INITIAL_SIZE
-// static_assert(INITIAL_SIZE == member_size(Fragment, type) + member_size(Fragment, index) + member_size(Fragment, total_size) + member_size(Fragment, next_size) + member_size(Fragment, checksum));
-// static_assert(INITIAL_SIZE == member_size(Fragment, type) + member_size(Fragment, index) + member_size(Fragment, total_size) + member_size(Fragment, next_size) + member_size(Fragment, alive_time));
+// Make sure that we have the correct payload sizes defined
+// Check PAYLOAD_SIZE
+static_assert(FRAGMENT_SIZE == sizeof(Fragment_Header) + PAYLOAD_SIZE);
+// Check HEADER_SIZE
+static_assert(HEADER_SIZE == sizeof(Fragment_Header));
 
 #endif /* _IMPLANT_H */
