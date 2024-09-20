@@ -9,7 +9,8 @@
 
 typedef struct Agent{
 	unsigned int alive;
-	Fragment_Header last_header;
+	Fragment_Header last_header;		// this is being used in listener_handler to reassemble fragments
+	int next_recv_size;					// this is being used in listener_comms to read the next packet
 	int current_message_size;
 	char* message;
 } Agent;

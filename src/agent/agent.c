@@ -49,22 +49,18 @@ void *keep_alive(void *vargp){
 	
 	signal(SIGALRM, agent_alive_alarm);
 	alarm(ALIVE_FREQUENCY);
-	for (;;){
+	while (!agent_close_flag){
 		if (agent_alive_flag){
 			debug_print("%s\n", "Sending alive packet");
 			
-			fragment = malloc(sizeof(Fragment));
-			memset(fragment, 0, sizeof(Fragment));
-			// set first 4 bytes of message to message size (4 bytes)
-			fragment->first_payload.total_size = htonl(sizeof(fragment->first_payload.alive_time));
-			fragment->first_payload.alive_time = htonl(time(NULL) - start_time);
+			fragment = calloc(1, sizeof(HEADER_SIZE));
+			fragment->header.type = htonl(TYPE_ALIVE);
+            fragment->header.alive_time = htonl(time(NULL) - start_time);
 			
 			message = malloc(sizeof(Queue_Message));
-			memset(message, 0, sizeof(Queue_Message));
-			
-			// size = type (4 bytes) + index (4 bytes) + payload size (4 bytes) + alive time (4 bytes)
-			message->size = sizeof(fragment->type) + sizeof(fragment->index) + sizeof(fragment->first_payload.total_size) + sizeof(fragment->first_payload.alive_time);
-			message->fragment = fragment;
+            message->id = 0;
+            message->size = HEADER_SIZE;
+            message->fragment = fragment;
 			
 			enqueue(agent_send_queue, &agent_send_queue_lock, message);
 			

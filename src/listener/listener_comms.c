@@ -50,7 +50,7 @@ STATIC int listener_receive(Connected_Agents* CA){
 			// check if ready to read
 			if (pfds[i].revents & POLLIN){
 				debug_print("POLLIN  %d\n", pfds[i].fd);
-				int nbytes = recv(pfds[i].fd, (void*)&fragment, CA->agents[pfds[i].fd].next_recv_size + INITIAL_SIZE, 0);
+				int nbytes = recv(pfds[i].fd, (void*)&fragment, CA->agents[pfds[i].fd].next_recv_size + HEADER_SIZE, 0);
 				if (nbytes == 0){
 					// close file descriptor and remove from poll array
 					printf("%s\n", "connection closed");
@@ -62,16 +62,20 @@ STATIC int listener_receive(Connected_Agents* CA){
 					return RET_ERROR;
 				}
 				else{
-					debug_print("received fragment: type: %d, index: %d, total_size: %d, next_size: %d\n", ntohl(fragment.type), ntohl(fragment.index), ntohl(fragment.total_size), ntohl(fragment.next_size));
+					debug_print("received fragment: type: %d, index: %d, total_size: %d, next_size: %d\n", \
+						ntohl(fragment.header.type), \
+						ntohl(fragment.header.index), \
+						ntohl(fragment.header.total_size), \
+						ntohl(fragment.header.next_size));
 
 					// update next read size
-					CA->agents[pfds[i].fd].next_recv_size = fragment.next_size;
+					CA->agents[pfds[i].fd].next_recv_size = fragment.header.next_size;
+					pthread_mutex_unlock(&CA->lock);
 					
-					Queue_Message* message = malloc(sizeof(message));
-					message->fragment = malloc(sizeof(fragment));
+					Queue_Message* message = malloc(sizeof(Queue_Message));
+					message->fragment = calloc(1, nbytes + 1);
 					message->id = pfds[i].fd;
 					message->size = nbytes;
-					memset(message->fragment, 0, sizeof(fragment));
 					memcpy(message->fragment, &fragment, nbytes);
 					
 					debug_print("adding message to queue: id: %d, size: %d\n", message->id, message->size);
@@ -80,26 +84,10 @@ STATIC int listener_receive(Connected_Agents* CA){
 				}
 			}
 		}
-		pthread_mutex_unlock(&CA->lock);
 	}
 
     return RET_OK;
 }
-
-STATIC int sendall(int fd, char *buf, int len){
-    int total = 0;
-    int bytesleft = len;
-    int n;
-
-    while(total < len) {
-        n = send(s, buf+total, bytesleft, 0);
-        if (n == RET_ERROR) { break; }
-        total += n;
-        bytesleft -= n;
-    }
-
-    return (n == RET_ERROR) ? RET_ERROR : RET_OK;
-} 
 
 STATIC int listener_send(){
 	Queue_Message* message;
@@ -108,7 +96,7 @@ STATIC int listener_send(){
 
 	debug_print("sending fragment: type: %d, index: %d, total_size: %d, next_size: %d\n", ntohl(message->fragment->type), ntohl(message->fragment->index), ntohl(message->fragment->total_size), ntohl(message->fragment->next_size));
 	
-	if (sendall(message->id, message->fragment, message->size, 0) == RET_ERROR){
+	if (sendall(message->id, message->fragment, message->size) == RET_ERROR){
 		printf("Send error\n");
 		return RET_ERROR;
 	}
