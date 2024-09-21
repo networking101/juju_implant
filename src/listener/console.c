@@ -274,6 +274,7 @@ void *console_thread(void *vargp){
 			switch(option){
 				case 9:
 					all_sigint = true;
+					printf("Goodbye\n");
 					break;
 				case 1:
 					printf("\n%s\n", "Active Agents\n-------------");
@@ -299,6 +300,7 @@ void *console_thread(void *vargp){
 					printf("Unknown option selected\n");
 					break;
 			}
+			if (all_sigint) break;
 			print_out("%s", MENU);
         }
 	}

@@ -17,7 +17,7 @@ int agent_add(Connected_Agents* CA, int sockfd){
 
 	memset(&(CA->agents[sockfd]), 0, sizeof(Agent));
 	CA->agents[sockfd].alive = time(NULL);
-	CA->agents[sockfd].last_fragment_index = -1;
+	CA->agents[sockfd].last_header.index = -1;
     
 	return RET_OK;
 }

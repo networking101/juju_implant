@@ -53,9 +53,9 @@ void *keep_alive(void *vargp){
 		if (agent_alive_flag){
 			debug_print("%s\n", "Sending alive packet");
 			
-			fragment = calloc(1, sizeof(HEADER_SIZE));
-			fragment->header.type = htonl(TYPE_ALIVE);
-            fragment->header.alive_time = htonl(time(NULL) - start_time);
+			fragment = calloc(1, HEADER_SIZE);
+            fragment->header.type = TYPE_ALIVE;
+            fragment->header.alive_time = time(NULL) - start_time;
 			
 			message = malloc(sizeof(Queue_Message));
             message->id = 0;
@@ -68,6 +68,9 @@ void *keep_alive(void *vargp){
 			alarm(ALIVE_FREQUENCY);
 		}
 	}
+
+    debug_print("%s\n", "agent keep alive thread done");
+    return 0;
 }
 
 int connect_to_listener(char* ip_addr, int port){
@@ -101,9 +104,9 @@ int connect_to_listener(char* ip_addr, int port){
     }
     
     // Start agent receive thread
-    pthread_create(&agent_receive_tid, NULL, agent_receive, &sockfd);
+    pthread_create(&agent_receive_tid, NULL, agent_receive_thread, &sockfd);
     // Start agent send thread
-    pthread_create(&agent_send_tid, NULL, agent_send, &sockfd);
+    pthread_create(&agent_send_tid, NULL, agent_send_thread, &sockfd);
     // Start agent message handler thread
     pthread_create(&agent_handler_tid, NULL, agent_handler_thread, &sockfd);
     // Start keep alive thread

@@ -43,12 +43,18 @@ STATIC int agent_receive(int *sockfd, int *next_read_size){
 			return RET_ERROR;
 		}
 	}
+
+	// Convert each value of header to host order
+	// this only works if each header value is 32 bits long
+	for (int32_t* value = (int32_t*)&fragment; value < (int32_t*)&fragment.buffer; value++){
+		*value = ntohl(*value);
+	}
 	
 	debug_print("received fragment: type: %d, index: %d, total_size: %d, next_size: %d\n", \
-		ntohl(fragment.header.type), \
-		ntohl(fragment.header.index), \
-		ntohl(fragment.header.total_size), \
-		ntohl(fragment.header.next_size));
+		fragment.header.type, \
+		fragment.header.index, \
+		fragment.header.total_size, \
+		fragment.header.next_size);
 
 	*next_read_size = fragment.header.next_size;
 
@@ -65,12 +71,24 @@ STATIC int agent_receive(int *sockfd, int *next_read_size){
 
 int agent_send(int *sockfd){
 	Queue_Message* message;
+	Fragment* fragment;
 
 	if (!(message = dequeue(agent_send_queue, &agent_send_queue_lock))) return RET_OK;
+
+	fragment = message->fragment;
 	
-	debug_print("sending fragment: type: %d, index: %d, size: %d\n", ntohl(message->fragment->type), ntohl(message->fragment->index), ntohl(message->fragment->first_payload.total_size));
+	debug_print("sending fragment: type: %d, index: %d, size: %d\n", \
+		message->fragment->header.type, \
+		message->fragment->header.index, \
+		message->fragment->header.total_size);
+
+	// Convert each value of header to network order
+	// this only works if each header value is 32 bits long
+	for (int32_t* value = (int32_t*)fragment; value < (int32_t*)&fragment->buffer; value++){
+		*value = htonl(*value);
+	}
 	
-	if (sendall(*sockfd, message->fragment, message->size) == RET_ERROR){
+	if (sendall(*sockfd, (void*)message->fragment, message->size) == RET_ERROR){
 		printf("Send error\n");
 		return RET_ERROR;
 	}

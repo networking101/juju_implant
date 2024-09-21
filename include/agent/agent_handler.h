@@ -5,12 +5,10 @@
 #include "queue.h"
 
 typedef struct Assembled_Message{
-	int type;
-	int last_fragment_index;
-	int total_message_size;
+	Fragment_Header last_header;
 	int current_message_size;
 	char* file_name;
-	char* complete_message;
+	char* message;
 } Assembled_Message;
 
 void *agent_handler_thread(void*);

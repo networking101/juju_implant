@@ -36,12 +36,13 @@ extern pthread_mutex_t listener_send_queue_lock;
 extern volatile sig_atomic_t all_sigint;
 extern volatile sig_atomic_t shell_sigint;
 
-STATIC int listener_handle_command(){
+STATIC int listener_handle_command(Agent* agent){
+	print_out("%s\n", agent->message);
 
 	return RET_OK;
 }
 
-STATIC int listener_handle_get_file(){
+STATIC int listener_handle_get_file(Agent* agent){
 	return RET_OK;
 }
 
@@ -49,7 +50,7 @@ STATIC int listener_parse_first_fragment(Agent* agent, Fragment* fragment, int32
 
 	// check if this is a first fragment
 	if (fragment->header.index != 0){
-		debug_print("Expected first fragment but got: %d\n", ntohl(fragment->type));
+		debug_print("Expected first fragment but got: %d\n", fragment->header.index);
 		return RET_ORDER;
 	}
 
@@ -59,7 +60,7 @@ STATIC int listener_parse_first_fragment(Agent* agent, Fragment* fragment, int32
 		return RET_ORDER;
 	}
 
-	debug_print("Handling first fragment: type: %d\n", ntohl(fragment->type));
+	debug_print("Handling first fragment: type: %d\n", fragment->header.type);
 
 	// save fragment to agent struct
 	memcpy(&agent->last_header, fragment, HEADER_SIZE);
@@ -85,7 +86,10 @@ STATIC int listener_parse_next_fragment(Agent* agent, Fragment* fragment, int si
 	if (fragment->header.type != agent->last_header.type || \
 		fragment->header.checksum != agent->last_header.checksum || \
 		fragment->header.index != agent->last_header.index + 1){
-		debug_print("Unexpected fragment: type: %d, checksum: %d, index: %d\n", fragment->header.type, fragment->header.checksum, fragment->header.index);
+		debug_print("Unexpected fragment: type: %d, checksum: %d, index: %d\n", \
+			fragment->header.type, \
+			fragment->header.checksum, \
+			fragment->header.index);
 		return RET_ORDER;
 	}
 	
@@ -114,10 +118,10 @@ STATIC int listener_handle_complete_message(Agent* agent){
 
 	switch(agent->last_header.type){
 		case TYPE_COMMAND:
-			listener_handle_command();
+			listener_handle_command(agent);
 			break;
 		case TYPE_GET_FILE:
-			listener_handle_get_file();
+			listener_handle_get_file(agent);
 			break;
 		default:
 			printf("ERROR UNKNOWN MESSAGE TYPE: %d\n", agent->last_header.type);
@@ -135,10 +139,10 @@ STATIC int listener_handle_message_fragment(Agent* agent, Queue_Message* q_messa
 
 	// handle message type other than keep alive
 	if (agent->last_header.index == -1){
-		int retval = listener_parse_first_fragment(agent, q_message->fragment, q_message->size);
+		retval = listener_parse_first_fragment(agent, q_message->fragment, q_message->size);
 	}
 	else{
-		int retval = listener_parse_next_fragment(agent, q_message->fragment, q_message->size);
+		retval = listener_parse_next_fragment(agent, q_message->fragment, q_message->size);
 	}
 
 	return retval;
@@ -147,7 +151,6 @@ STATIC int listener_handle_message_fragment(Agent* agent, Queue_Message* q_messa
 STATIC int listener_handle_message(Connected_Agents* CA){
 	int retval = RET_OK;
 	Queue_Message* q_message;
-	Fragment* fragment;
 	Agent* agent;
 
 	if (!(q_message = dequeue(listener_receive_queue, &listener_receive_queue_lock))) return RET_OK;
@@ -164,10 +167,10 @@ STATIC int listener_handle_message(Connected_Agents* CA){
 	}
 
 	// if type is alive packet, update keep alive parameter
-	if (ntohl(fragment->header.type) == TYPE_ALIVE){
+	if (q_message->fragment->header.type == TYPE_ALIVE){
 		CA->agents[q_message->id].alive = (unsigned int)time(NULL);
 		pthread_mutex_unlock(&CA->lock);
-		debug_print("Agent %d is alive: %lu seconds\n", q_message->id, (unsigned long)ntohl(fragment->alive_time));
+		debug_print("Agent %d is alive: %u seconds\n", q_message->id, q_message->fragment->header.alive_time);
 		return RET_OK;
 	}
 
@@ -181,6 +184,8 @@ STATIC int listener_handle_message(Connected_Agents* CA){
 	retval = listener_handle_complete_message(agent);
 	pthread_mutex_unlock(&CA->lock);
 
+	free(q_message->fragment);
+	free(q_message);
 	return retval;
 }
 
@@ -192,9 +197,9 @@ int listener_prepare_message(int sockfd, int type, char* message, int message_si
 
 	// prepare first fragment. Only purpose is to prepare for next fragment size
 	fragment = calloc(1, sizeof(Fragment));
-	fragment->header.type = htonl(type);
-	fragment->header.index = htonl(index++);
-	fragment->header.total_size = htonl(message_size);
+	fragment->header.type = type;
+	fragment->header.index = index++;
+	fragment->header.total_size = message_size;
 	fragment->header.checksum = 0;							// TODO
 	
 	next_size = message_size < PAYLOAD_SIZE ? message_size : PAYLOAD_SIZE;
@@ -212,9 +217,9 @@ int listener_prepare_message(int sockfd, int type, char* message, int message_si
 
 		// send remaining fragments
 		fragment = calloc(1, sizeof(Fragment));
-		fragment->header.type = htonl(type);
-		fragment->header.index = htonl(index++);
-		fragment->header.total_size = htonl(message_size);
+		fragment->header.type = type;
+		fragment->header.index = index++;
+		fragment->header.total_size = message_size;
 		fragment->header.checksum = 0;							// TODO
 
 		next_size = (message_size - (bytes_sent + next_size)) < PAYLOAD_SIZE ? (message_size - (bytes_sent + next_size)) : PAYLOAD_SIZE;

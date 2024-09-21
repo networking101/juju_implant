@@ -26,3 +26,5 @@ encrypted comms
 handle newlines from shell response fragments  
 figure out consistent return variables in functions (ret_val)  
 message checksum  
+
+handle queue mutex  

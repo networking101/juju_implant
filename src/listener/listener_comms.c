@@ -62,11 +62,17 @@ STATIC int listener_receive(Connected_Agents* CA){
 					return RET_ERROR;
 				}
 				else{
+					// Convert each value of header to host order
+					// this only works if each header value is 32 bits long
+					for (int32_t* value = (int32_t*)&fragment; value < (int32_t*)&fragment.buffer; value++){
+						*value = ntohl(*value);
+					}
+
 					debug_print("received fragment: type: %d, index: %d, total_size: %d, next_size: %d\n", \
-						ntohl(fragment.header.type), \
-						ntohl(fragment.header.index), \
-						ntohl(fragment.header.total_size), \
-						ntohl(fragment.header.next_size));
+						fragment.header.type, \
+						fragment.header.index, \
+						fragment.header.total_size, \
+						fragment.header.next_size);
 
 					// update next read size
 					CA->agents[pfds[i].fd].next_recv_size = fragment.header.next_size;
@@ -91,12 +97,25 @@ STATIC int listener_receive(Connected_Agents* CA){
 
 STATIC int listener_send(){
 	Queue_Message* message;
+	Fragment* fragment;
 
 	if (!(message = dequeue(listener_send_queue, &listener_send_queue_lock))) return RET_OK;
 
-	debug_print("sending fragment: type: %d, index: %d, total_size: %d, next_size: %d\n", ntohl(message->fragment->type), ntohl(message->fragment->index), ntohl(message->fragment->total_size), ntohl(message->fragment->next_size));
+	fragment = message->fragment;
+
+	debug_print("sending fragment: type: %d, index: %d, total_size: %d, next_size: %d\n", \
+		fragment->header.type, \
+		fragment->header.index, \
+		fragment->header.total_size, \
+		fragment->header.next_size);
+
+	// Convert each value of header to network order
+	// this only works if each header value is 32 bits long
+	for (int32_t* value = (int32_t*)fragment; value < (int32_t*)&fragment->buffer; value++){
+		*value = htonl(*value);
+	}
 	
-	if (sendall(message->id, message->fragment, message->size) == RET_ERROR){
+	if (sendall(message->id, (void*)message->fragment, message->size) == RET_ERROR){
 		printf("Send error\n");
 		return RET_ERROR;
 	}

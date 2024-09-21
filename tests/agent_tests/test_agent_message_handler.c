@@ -12,7 +12,7 @@
 
 #define ALIVE	"ALIVE"
 
-#ifdef 0
+#if 0
 // Test if parse_first_fragment() can handle a short message. Tested by setting up a fragment structure and initializing a fragment as a static character array.
 static void test_parse_first_fragment_short_message(void **state){
 	Fragment fragment = {0};

