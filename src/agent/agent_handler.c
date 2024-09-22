@@ -49,18 +49,20 @@ STATIC int agent_handle_put_file_name(Assembled_Message* a_message){
 
 STATIC int agent_handle_put_file(Assembled_Message* a_message){
 	FILE* file_fd;
+	int nbytes;
 
-	if ((file_fd = fopen(a_message->file_name, "w")) == 0){
+	if ((file_fd = fopen(a_message->file_name, "wb")) == 0){
 		printf("ERROR file open\n");
 		return RET_ERROR;
 	}
 
-	if (fwrite(a_message->message, 1, a_message->last_header.total_size, file_fd) < a_message->last_header.total_size){
+	// TODO why doesn't this write more than 4096 bytes?
+	if ((nbytes = fwrite(a_message->message, 1, a_message->last_header.total_size, file_fd)) < a_message->last_header.total_size){
 		printf("ERROR fwrite\n");
 		return RET_ERROR;
 	}
 
-	debug_print("Put file: %s, size: %d\n", a_message->file_name, a_message->last_header.total_size);
+	debug_print("Put file: %s, size: %d\n", a_message->file_name, nbytes);
 
 	free(a_message->message);
 	free(a_message->file_name);
@@ -78,7 +80,7 @@ STATIC int agent_handle_get_file(Assembled_Message* a_message){
 		//TODO send status message
 	}
 
-	if ((file_fd = fopen(a_message->message, "r")) == 0){
+	if ((file_fd = fopen(a_message->message, "rb")) == 0){
 		printf("ERROR file open\n");
 		return RET_ERROR;
 	}
@@ -158,7 +160,7 @@ STATIC int agent_parse_next_fragment(Assembled_Message* a_message, Fragment* fra
 	}
 	
 	// copy payload to end of message buffer
-	memcpy(a_message->message, fragment->buffer, a_message->last_header.next_size);
+	memcpy(a_message->message + a_message->current_message_size, fragment->buffer, a_message->last_header.next_size);
 	
 	// update current size of message
 	a_message->current_message_size += a_message->last_header.next_size;

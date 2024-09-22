@@ -127,7 +127,7 @@ STATIC int put_file_command(int agent_fd){
 		return RET_OK;
 	}
 
-	if ((file_fd = fopen(buf, "r")) == 0){
+	if ((file_fd = fopen(buf, "rb")) == 0){
 		printf("ERROR file open\n");
 		return RET_ERROR;
 	}

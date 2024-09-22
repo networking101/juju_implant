@@ -27,4 +27,4 @@ handle newlines from shell response fragments
 figure out consistent return variables in functions (ret_val)  
 message checksum  
 
-handle queue mutex  
+handle queue mutex. We need to mutex to lock until agent_send sends all fragments of message  

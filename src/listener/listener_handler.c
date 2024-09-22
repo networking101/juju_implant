@@ -94,7 +94,7 @@ STATIC int listener_parse_next_fragment(Agent* agent, Fragment* fragment, int si
 	}
 	
 	// copy payload to end of message buffer
-	memcpy(agent->message, fragment->buffer, agent->last_header.next_size);
+	memcpy(agent->message + agent->current_message_size, fragment->buffer, agent->last_header.next_size);
 	
 	// update current size of message
 	agent->current_message_size += agent->last_header.next_size;

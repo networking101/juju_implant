@@ -19,8 +19,8 @@
 #define RET_OK		0
 #define RET_ORDER	1
 
-#define FRAGMENT_SIZE		4096
-#define PAYLOAD_SIZE		4076
+#define FRAGMENT_SIZE		1024
+#define PAYLOAD_SIZE		1004
 #define HEADER_SIZE			20
 
 #define AGENT_TIMEOUT	60
