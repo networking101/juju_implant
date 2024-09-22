@@ -21,8 +21,10 @@ extern Queue* shell_receive_queue;
 extern pthread_mutex_t shell_receive_queue_lock;
 extern Queue* shell_send_queue;
 extern pthread_mutex_t shell_send_queue_lock;
-// SIGINT flags
+// SIGINT flag
 extern volatile sig_atomic_t agent_close_flag;
+// Connected flag
+extern volatile sig_atomic_t agent_disconnect_flag;
 
 typedef struct Pipes{
 	int pipefd[2];
@@ -74,6 +76,7 @@ STATIC int execute_shell(){
 		dup2(shell_pipes.pipes[STDERR].pipefd[PIPE_IN], STDERR_FILENO);		// dup input of STDERR to shell STDERR
 		
 		// Execute shell
+		debug_print("%s\n", "shell starting");
 		char * const argv[] = {"agent_shell", NULL};
 		execve("/bin/sh", argv, NULL);
 		
@@ -92,7 +95,7 @@ STATIC int execute_shell(){
 		// check if child is still running
 		// if still running, dequeue messages and send to shell
 		// if child was killed, we need to start another child process
-		while (!(waitpid(pid, NULL, WNOHANG))){
+		while (!(waitpid(pid, NULL, WNOHANG)) && !agent_close_flag && !agent_disconnect_flag){
 			if ((message = dequeue(shell_send_queue, &shell_send_queue_lock))){
 				debug_print("dequeued message for shell: %s, %d\n", message->buffer, message->size);
 				if ((nbytes = write(shell_pipes.pipes[STDIN].pipefd[PIPE_IN], message->buffer, message->size)) == -1){
@@ -152,15 +155,16 @@ STATIC int execute_shell(){
 		close(shell_pipes.pipes[STDERR].pipefd[PIPE_OUT]);							// close output of STDERR
 	}
 	
-	debug_print("%s\n", "shell closed, restarting\n");
-	
+	debug_print("%s\n", "shell closed");
 	return ret_val;
 }
 
 void *shell_thread(void *vargp){
 	int ret_val;
+
+	debug_print("%s\n", "starting shell thread");
 	
-	while (!agent_close_flag){
+	while (!agent_close_flag && !agent_disconnect_flag){
 		if ((ret_val = execute_shell()) != RET_OK){
 			printf("ERROR execute shell\n");
 			exit(RET_ERROR);

@@ -269,7 +269,7 @@ int listener_prepare_message(int sockfd, int type, char* message, int message_si
 		bytes_sent += this_size;
 	}
 	
-	free(message);
+	if (message) free(message);
 	return 0;
 }
 

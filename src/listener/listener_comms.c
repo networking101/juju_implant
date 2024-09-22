@@ -39,7 +39,7 @@ STATIC int listener_receive(Connected_Agents* CA){
 	
 	struct pollfd *pfds = CA->pfds;
 	
-	poll_count = poll(pfds, CA->nfds, POLL_TIMEOUT);
+	poll_count = poll(pfds, CA->nfds, MS_TIMEOUT);
 	if (poll_count == -1){
 		printf("ERROR poll\n");
 		return RET_ERROR;
@@ -53,8 +53,9 @@ STATIC int listener_receive(Connected_Agents* CA){
 				int nbytes = recv(pfds[i].fd, (void*)&fragment, CA->agents[pfds[i].fd].next_recv_size + HEADER_SIZE, 0);
 				if (nbytes == 0){
 					// close file descriptor and remove from poll array
-					printf("%s\n", "connection closed");
+					printf("agent %d connection closed\n", pfds[i].fd);
 					agent_delete(CA, i);
+					pthread_mutex_unlock(&CA->lock);
 				}
 				else if (nbytes == -1){
 					printf("ERROR recv error\n");

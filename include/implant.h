@@ -4,9 +4,9 @@
 #ifndef _IMPLANT_H
 #define _IMPLANT_H
 
-#define STDIN   0
-#define STDOUT  1
-#define STDERR  2
+#define STDIN				0
+#define STDOUT				1
+#define STDERR				2
 
 #define TYPE_ALIVE			0
 #define TYPE_COMMAND		1
@@ -14,17 +14,23 @@
 #define TYPE_PUT_FILE		3
 #define TYPE_GET_FILE_NAME	4
 #define TYPE_GET_FILE		5
+#define TYPE_RESTART_SHELL	6
+#define TYPE_CLOSE_AGENT	7
+#define TYPE_RESPONSE		8
 
-#define RET_ERROR	-1
-#define RET_OK		0
-#define RET_ORDER	1
+#define RET_ERROR			-1
+#define RET_OK				0
+#define RET_ORDER			1
 
 #define WRITE_SIZE			4096
 #define FRAGMENT_SIZE		1024
 #define PAYLOAD_SIZE		1004
 #define HEADER_SIZE			20
 
-#define AGENT_TIMEOUT	60
+#define AGENT_TIMEOUT		60
+#define MS_TIMEOUT			1000			// 1000 ms
+#define S_TIMEOUT  			1				// 1 s
+#define ALIVE_FREQUENCY		10				// 10 s
 
 // macro to return size of structure field
 #define member_size(type, member)	(sizeof( ((type *)0)->member))

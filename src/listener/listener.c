@@ -35,7 +35,6 @@ This is the main file for the listener. It will do the following:
 
 #define LISTEN_BACKLOG	3
 #define DEFAULT_PORT	55555
-#define CHECK_ALIVE_FREQUENCY	10
 
 // Globals
 // Receive Queue
@@ -71,7 +70,7 @@ void *check_alive_thread(void *vargp){
         all_sigint = true;
     }
 
-    alarm(CHECK_ALIVE_FREQUENCY);
+    alarm(ALIVE_FREQUENCY);
 	while (!all_sigint){
 		if (listener_alive_flag){
             pthread_mutex_lock(&CA->lock);
@@ -85,9 +84,9 @@ void *check_alive_thread(void *vargp){
             pthread_mutex_unlock(&CA->lock);
 			
 			listener_alive_flag = false;
-            alarm(CHECK_ALIVE_FREQUENCY);
+            alarm(ALIVE_FREQUENCY);
 		}
-        sleep(SELECT_TIMEOUT);
+        sleep(S_TIMEOUT);
 	}
     debug_print("%s\n", "check_alive_thread done");
 	return 0;
@@ -133,7 +132,7 @@ int start_sockets(Connected_Agents* CA, int port){
     listener_pfd[0].events = POLLIN;
 
     while (!all_sigint){
-        poll_count = poll(listener_pfd, 1, POLL_TIMEOUT);
+        poll_count = poll(listener_pfd, 1, MS_TIMEOUT);
         if (poll_count == -1 && errno != EINTR){
             printf("ERROR poll\n");
             all_sigint = true;

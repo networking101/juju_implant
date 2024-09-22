@@ -24,6 +24,8 @@ extern Queue* shell_send_queue;
 extern pthread_mutex_t shell_send_queue_lock;
 // SIGINT flags
 extern volatile sig_atomic_t agent_close_flag;
+// Connected flag
+extern volatile sig_atomic_t agent_disconnect_flag;
 
 STATIC int agent_handle_command(Assembled_Message* a_message){
 	Queue_Message* message = malloc(sizeof(Queue_Message));
@@ -227,6 +229,13 @@ int agent_handle_complete_message(Assembled_Message* a_message){
 		case TYPE_PUT_FILE:
 			agent_handle_put_file(a_message);
 			break;
+		case TYPE_RESTART_SHELL:
+			debug_print("%s\n", "TYPE_RESTART_SHELL");
+			break;
+		case TYPE_CLOSE_AGENT:
+			debug_print("%s\n", "TYPE_CLOSE_AGENT");
+			agent_close_flag = true;
+			break;
 		default:
 			printf("ERROR UNKNOWN MESSAGE TYPE: %d\n", a_message->last_header.type);
 			ret_val = RET_ERROR;
@@ -312,7 +321,9 @@ void *agent_handler_thread(void *vargp){
 	Assembled_Message assembled_message = {0};
 	assembled_message.last_header.index = -1;
 
-	while(!agent_close_flag){
+	debug_print("%s\n", "starting agent handler thread");
+
+	while(!agent_close_flag && !agent_disconnect_flag){
 		if (agent_handle_message(&assembled_message) != RET_OK){
 			printf("agent_handler_thread error\n");
 			agent_close_flag = true;

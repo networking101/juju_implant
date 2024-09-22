@@ -5,6 +5,7 @@
 #include <pthread.h>
 #include <stdbool.h>
 #include <signal.h>
+#include <errno.h>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -16,8 +17,6 @@
 #include "agent_comms.h"
 #include "agent_handler.h"
 #include "shell.h"
-
-#define ALIVE_FREQUENCY	10
 
 // Globals
 // Receive Queue
@@ -36,8 +35,10 @@ pthread_mutex_t shell_send_queue_lock;
 time_t start_time;
 // Alarm flag
 volatile sig_atomic_t agent_alive_flag = false;
-// SIGINT flags
+// SIGINT flag
 volatile sig_atomic_t agent_close_flag = false;
+// Connected flag
+volatile sig_atomic_t agent_disconnect_flag = false;
 
 void agent_alive_alarm(int sig){
 	agent_alive_flag = true;
@@ -46,10 +47,12 @@ void agent_alive_alarm(int sig){
 void *keep_alive(void *vargp){
 	Fragment* fragment;
 	Queue_Message* message;
+
+    debug_print("%s\n", "starting keep alive thread");
 	
 	signal(SIGALRM, agent_alive_alarm);
 	alarm(ALIVE_FREQUENCY);
-	while (!agent_close_flag){
+	while (!agent_close_flag && !agent_disconnect_flag){
 		if (agent_alive_flag){
 			debug_print("%s\n", "Sending alive packet");
 			
@@ -74,11 +77,10 @@ void *keep_alive(void *vargp){
 }
 
 int connect_to_listener(char* ip_addr, int port){
-
-    int sockfd;
-    int status;
+    int sockfd, status;
     struct sockaddr_in addr;
     pthread_t agent_receive_tid, agent_send_tid, agent_handler_tid, keep_alive_tid, shell_tid;
+    struct timeval tv;
 
     if (ip_addr == NULL || !port){
         printf("Bad IP or port\n");
@@ -93,37 +95,56 @@ int connect_to_listener(char* ip_addr, int port){
         return RET_ERROR;
     }
 
-    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
-        printf("socket failed\n");
-        return RET_ERROR;
+    // keep trying to connect to listener
+    // agent_disconnect_flag global flag will keep track of our connection to listener
+    // If listener disconnects, close all threads and sit in hybernation
+    while(!agent_close_flag){
+
+        if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
+            printf("socket failed\n");
+            return RET_ERROR;
+        }
+
+        tv.tv_sec = S_TIMEOUT;
+        tv.tv_usec = 0;
+
+        if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv))){
+            printf("setsockopt failed\n");
+            return RET_ERROR;
+        }
+
+        if ((status = connect(sockfd, (struct sockaddr*)&addr, sizeof(addr))) < 0){
+            debug_print("%s\n", "connect failed");
+        }
+        else{
+            agent_disconnect_flag = false;
+        
+            // Start agent receive thread
+            pthread_create(&agent_receive_tid, NULL, agent_receive_thread, &sockfd);
+            // Start agent send thread
+            pthread_create(&agent_send_tid, NULL, agent_send_thread, &sockfd);
+            // Start agent message handler thread
+            pthread_create(&agent_handler_tid, NULL, agent_handler_thread, &sockfd);
+            // Start keep alive thread
+            pthread_create(&keep_alive_tid, NULL, keep_alive, NULL);
+            // Start shell thread
+            pthread_create(&shell_tid, NULL, shell_thread, NULL);
+            
+            agent_alive_flag = true;
+            
+            pthread_join(agent_receive_tid, NULL);
+            pthread_join(agent_send_tid, NULL);
+            pthread_join(agent_handler_tid, NULL);
+            pthread_join(keep_alive_tid, NULL);
+            pthread_join(shell_tid, NULL);
+        }
+
+        if (!agent_close_flag) sleep(ALIVE_FREQUENCY);
     }
 
-    if ((status = connect(sockfd, (struct sockaddr*)&addr, sizeof(addr))) < 0){
-        printf("connect failed\n");
-        return RET_ERROR;
-    }
-    
-    // Start agent receive thread
-    pthread_create(&agent_receive_tid, NULL, agent_receive_thread, &sockfd);
-    // Start agent send thread
-    pthread_create(&agent_send_tid, NULL, agent_send_thread, &sockfd);
-    // Start agent message handler thread
-    pthread_create(&agent_handler_tid, NULL, agent_handler_thread, &sockfd);
-    // Start keep alive thread
-    pthread_create(&keep_alive_tid, NULL, keep_alive, NULL);
-    // Start shell thread
-    pthread_create(&shell_tid, NULL, shell_thread, NULL);
-    
-    agent_alive_flag = true;
-    
-    pthread_join(agent_receive_tid, NULL);
-    pthread_join(agent_send_tid, NULL);
-    pthread_join(agent_handler_tid, NULL);
-    pthread_join(keep_alive_tid, NULL);
-    pthread_join(shell_tid, NULL);
-
+    debug_print("%s\n", "agent connect done");
     close(sockfd);
-    return RET_OK;;
+    return RET_OK;
 }
 
 #ifndef UNIT_TESTING
@@ -147,7 +168,9 @@ int main(int argc, char** argv){
     pthread_mutex_init(&shell_send_queue_lock, NULL);
     
     connect_to_listener(ip_addr, port);
-    return RET_OK;;
+
+    debug_print("%s\n", "closed cleanly");
+    return RET_OK;
 }
 #endif /* UNIT_TESTING */
 

