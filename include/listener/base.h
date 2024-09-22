@@ -12,6 +12,7 @@ typedef struct Agent{
 	Fragment_Header last_header;		// this is being used in listener_handler to reassemble fragments
 	int next_recv_size;					// this is being used in listener_comms to read the next packet
 	int current_message_size;
+	char* file_name;
 	char* message;
 } Agent;
 

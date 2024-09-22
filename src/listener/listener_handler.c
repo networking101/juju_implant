@@ -42,7 +42,38 @@ STATIC int listener_handle_command(Agent* agent){
 	return RET_OK;
 }
 
+STATIC int listener_handle_get_file_name(Agent* agent){
+
+	agent->file_name = agent->message;
+	agent->message = NULL;
+
+	debug_print("Get file name: %s\n", agent->file_name);
+
+	return RET_OK;
+}
+
 STATIC int listener_handle_get_file(Agent* agent){
+	FILE* file_fd;
+
+	printf("JUJU: %s\n", agent->file_name);
+	if ((file_fd = fopen(agent->file_name, "wb")) == 0){
+		printf("ERROR file open\n");
+		return RET_ERROR;
+	}
+
+	if (writeall(file_fd, agent->message, agent->last_header.total_size) != RET_OK){
+		printf("ERROR fwrite\n");
+		return RET_ERROR;
+	}
+
+	debug_print("Get file: %s, size: %d\n", agent->file_name, agent->last_header.total_size);
+
+	fclose(file_fd);
+	free(agent->message);
+	free(agent->file_name);
+	agent->message = NULL;
+	agent->file_name = NULL;
+
 	return RET_OK;
 }
 
@@ -119,6 +150,9 @@ STATIC int listener_handle_complete_message(Agent* agent){
 	switch(agent->last_header.type){
 		case TYPE_COMMAND:
 			listener_handle_command(agent);
+			break;
+		case TYPE_GET_FILE_NAME:
+			listener_handle_get_file_name(agent);
 			break;
 		case TYPE_GET_FILE:
 			listener_handle_get_file(agent);

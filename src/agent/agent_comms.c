@@ -77,10 +77,11 @@ int agent_send(int *sockfd){
 
 	fragment = message->fragment;
 	
-	debug_print("sending fragment: type: %d, index: %d, size: %d\n", \
-		message->fragment->header.type, \
-		message->fragment->header.index, \
-		message->fragment->header.total_size);
+	debug_print("sending fragment: type: %d, index: %d, total_size: %d, next_size: %d\n", \
+		fragment->header.type, \
+		fragment->header.index, \
+		fragment->header.total_size, \
+		fragment->header.next_size);
 
 	// Convert each value of header to network order
 	// this only works if each header value is 32 bits long

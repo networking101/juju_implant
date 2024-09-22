@@ -41,6 +41,7 @@ STATIC int agent_handle_command(Assembled_Message* a_message){
 STATIC int agent_handle_put_file_name(Assembled_Message* a_message){
 
 	a_message->file_name = a_message->message;
+	a_message->message = NULL;
 
 	debug_print("Put file name: %s\n", a_message->file_name);
 
@@ -49,35 +50,37 @@ STATIC int agent_handle_put_file_name(Assembled_Message* a_message){
 
 STATIC int agent_handle_put_file(Assembled_Message* a_message){
 	FILE* file_fd;
-	int nbytes;
 
+	// TODO check if path exists
 	if ((file_fd = fopen(a_message->file_name, "wb")) == 0){
 		printf("ERROR file open\n");
 		return RET_ERROR;
 	}
 
-	// TODO why doesn't this write more than 4096 bytes?
-	if ((nbytes = fwrite(a_message->message, 1, a_message->last_header.total_size, file_fd)) < a_message->last_header.total_size){
+	if (writeall(file_fd, a_message->message, a_message->last_header.total_size) != RET_OK){
 		printf("ERROR fwrite\n");
 		return RET_ERROR;
 	}
 
-	debug_print("Put file: %s, size: %d\n", a_message->file_name, nbytes);
+	debug_print("Put file: %s, size: %d\n", a_message->file_name, a_message->last_header.total_size);
 
+	fclose(file_fd);
 	free(a_message->message);
 	free(a_message->file_name);
 
 	return RET_OK;
 }
 
-STATIC int agent_handle_get_file(Assembled_Message* a_message){
+STATIC int agent_handle_get_file_name(Assembled_Message* a_message){
 	FILE* file_fd;
-	int file_size, bytes_read;
-	char *file_buffer;
+	int file_size, bytes_read, file_name_size;
+	char *file_buffer, *file_name_buffer, *slash_ptr;
+	const char slash = '/';
 
 	if (access(a_message->message, F_OK)){
 		debug_print("%s\n", "File doesn't exist");
 		//TODO send status message
+		return RET_OK;
 	}
 
 	if ((file_fd = fopen(a_message->message, "rb")) == 0){
@@ -104,10 +107,25 @@ STATIC int agent_handle_get_file(Assembled_Message* a_message){
 	}
 	
 	fclose(file_fd);
-	
-	agent_prepare_message(TYPE_GET_FILE, file_buffer, file_size);
 
-	debug_print("Get file: %s, size: %d\n", a_message->message, file_size);
+	// remove path from file name when sending to listener
+	if ((slash_ptr = strrchr(a_message->message, slash)) == NULL){
+		debug_print("Get file: %s, size: %d\n", a_message->message, file_size);
+		agent_prepare_message(TYPE_GET_FILE_NAME, a_message->message, a_message->current_message_size);
+	}
+	else{
+		// start at next character after last forward slash
+		slash_ptr++;
+		file_name_size = strlen(slash_ptr);
+		file_name_buffer = calloc(1, file_name_size + 1);
+		memcpy(file_name_buffer, slash_ptr, file_name_size);
+
+		debug_print("Get file: %s, size: %d\n", file_name_buffer, file_size);
+		agent_prepare_message(TYPE_GET_FILE_NAME, file_name_buffer, file_name_size + 1);
+		free(a_message->message);
+		a_message = NULL;
+	}
+	agent_prepare_message(TYPE_GET_FILE, file_buffer, file_size);
 
 	return RET_OK;
 }
@@ -200,8 +218,8 @@ int agent_handle_complete_message(Assembled_Message* a_message){
 		case TYPE_COMMAND:
 			agent_handle_command(a_message);
 			break;
-		case TYPE_GET_FILE:
-			agent_handle_get_file(a_message);
+		case TYPE_GET_FILE_NAME:
+			agent_handle_get_file_name(a_message);
 			break;
 		case TYPE_PUT_FILE_NAME:
 			agent_handle_put_file_name(a_message);

@@ -19,4 +19,19 @@ int sendall(int fd, char *buf, int len){
     }
 
     return (n == RET_ERROR) ? RET_ERROR : RET_OK;
-} 
+}
+
+int writeall(FILE* fd, char *buf, int len){
+    int total = 0;
+    int num, n;
+
+    while(total < len) {
+        num = (len - total >= WRITE_SIZE) ? WRITE_SIZE: (len - total);
+        n = fwrite(buf + total, num, 1, fd);
+        if (n != 1) { break; }
+        
+        total += num;
+    }
+
+    return (n == RET_ERROR) ? RET_ERROR : RET_OK;
+}

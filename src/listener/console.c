@@ -74,6 +74,8 @@ STATIC int shell_console(int agent_fd){
 			memset(buffer, 0, PAYLOAD_SIZE);
 			memcpy(buffer, command_buf, PAYLOAD_SIZE);
 
+			debug_print("Sending console command: %s\n", buffer);
+
 			listener_prepare_message(agent_fd, TYPE_COMMAND, buffer, strnlen(buffer, PAYLOAD_SIZE));
 			print_out("%s\n", "");
 		}
@@ -95,13 +97,16 @@ STATIC int get_file_command(int agent_fd){
 		return RET_ERROR;
 	}
 
+	// take newline off
+	buf[strcspn(buf, "\n")] = 0;
+
 	file_name_size = strlen(buf);
-	file_name_buffer = malloc(file_name_size);
+	file_name_buffer = calloc(1, file_name_size + 1);
 	memcpy(file_name_buffer, buf, file_name_size);
 
-	listener_prepare_message(agent_fd, TYPE_GET_FILE_NAME, file_name_buffer, file_name_size);
-
 	debug_print("Get file: %s\n", file_name_buffer);
+
+	listener_prepare_message(agent_fd, TYPE_GET_FILE_NAME, file_name_buffer, file_name_size + 1);
 
 	return RET_OK;
 }
@@ -162,10 +167,10 @@ STATIC int put_file_command(int agent_fd){
 	buf[strcspn(buf, "\n")] = 0;
 
 	file_name_size = strlen(buf);
-	file_name_buffer = malloc(file_name_size);
+	file_name_buffer = calloc(1, file_name_size + 1);
 	memcpy(file_name_buffer, buf, file_name_size);
 
-	listener_prepare_message(agent_fd, TYPE_PUT_FILE_NAME, file_name_buffer, file_name_size);
+	listener_prepare_message(agent_fd, TYPE_PUT_FILE_NAME, file_name_buffer, file_name_size + 1);
 	listener_prepare_message(agent_fd, TYPE_PUT_FILE, file_buffer, file_size);
 
 	debug_print("Put file: %s, size: %d\n", file_name_buffer, file_size);

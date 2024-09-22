@@ -19,6 +19,7 @@
 #define RET_OK		0
 #define RET_ORDER	1
 
+#define WRITE_SIZE			4096
 #define FRAGMENT_SIZE		1024
 #define PAYLOAD_SIZE		1004
 #define HEADER_SIZE			20
@@ -52,5 +53,7 @@ static_assert(FRAGMENT_SIZE == sizeof(Fragment_Header) + PAYLOAD_SIZE);
 static_assert(HEADER_SIZE == sizeof(Fragment_Header));
 
 int sendall(int, char*, int);
+
+int writeall(FILE*, char*, int);
 
 #endif /* _IMPLANT_H */
