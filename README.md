@@ -26,3 +26,4 @@ message checksum
 handle queue mutex. We need to mutex to lock until agent_send sends all fragments of message  
 when the agent is force closed, the console hangs  
 if strings are being sent, ensure they include null character at end  
+Don't use malloc messages for prepare send. keep messages on the stack  

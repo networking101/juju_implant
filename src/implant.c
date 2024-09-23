@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
+#include <string.h>
 
 #include <sys/socket.h>
 
@@ -34,4 +36,34 @@ int writeall(FILE* fd, char *buf, int len){
     }
 
     return (n == RET_ERROR) ? RET_ERROR : RET_OK;
+}
+
+int check_directory(char* pathname, int len){
+    struct stat sb;
+    char* slash_ptr;
+    const char slash = '/';
+    char* directory_path;
+
+    if (pathname == NULL){
+        return RET_ERROR;
+    }
+
+    directory_path = malloc(len);
+    memcpy(directory_path, pathname, len);
+    slash_ptr = strrchr(directory_path, slash);
+
+    if (slash_ptr == NULL){
+        // no directory included. Put file in current working directory
+        return RET_OK;
+    }
+
+    *slash_ptr = 0;
+
+    // check if directory is valid
+    if (stat(directory_path, &sb) == 0 && S_ISDIR(sb.st_mode))
+    {
+        return RET_OK;
+    }
+
+    return RET_ERROR;
 }

