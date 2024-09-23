@@ -14,9 +14,8 @@
 #define TYPE_PUT_FILE		3
 #define TYPE_GET_FILE_NAME	4
 #define TYPE_GET_FILE		5
-#define TYPE_RESTART_SHELL	6
-#define TYPE_CLOSE_AGENT	7
-#define TYPE_RESPONSE		8
+#define TYPE_CLOSE_AGENT	6
+#define TYPE_RESPONSE		7
 
 #define RET_ERROR			-1
 #define RET_OK				0

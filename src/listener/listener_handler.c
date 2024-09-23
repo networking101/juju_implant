@@ -25,6 +25,8 @@ This file is responsible for the following:
 #include "base.h"
 #include "listener_handler.h"
 
+#include "zlib.h"
+
 // Globals
 // Receive Queue
 extern Queue* listener_receive_queue;
@@ -37,7 +39,7 @@ extern volatile sig_atomic_t all_sigint;
 extern volatile sig_atomic_t shell_sigint;
 
 STATIC int listener_handle_command(Agent* agent){
-	print_out("%s\n", agent->message);
+	print_out("%s", agent->message);
 
 	return RET_OK;
 }
@@ -228,6 +230,9 @@ int listener_prepare_message(int sockfd, int type, char* message, int message_si
 	Fragment* fragment;
 	int bytes_sent = 0, index = 0;
 	int this_size, next_size;
+	uLong crc = crc32(0, (unsigned char*)message, message_size);
+
+	printf("JUJU crc: %lu\n", crc);
 
 	// prepare first fragment. Only purpose is to prepare for next fragment size
 	fragment = calloc(1, sizeof(Fragment));

@@ -229,9 +229,6 @@ int agent_handle_complete_message(Assembled_Message* a_message){
 		case TYPE_PUT_FILE:
 			agent_handle_put_file(a_message);
 			break;
-		case TYPE_RESTART_SHELL:
-			debug_print("%s\n", "TYPE_RESTART_SHELL");
-			break;
 		case TYPE_CLOSE_AGENT:
 			debug_print("%s\n", "TYPE_CLOSE_AGENT");
 			agent_close_flag = true;
