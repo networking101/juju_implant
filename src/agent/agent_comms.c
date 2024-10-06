@@ -27,7 +27,7 @@ extern volatile sig_atomic_t agent_close_flag;
 // Connected flag
 extern volatile sig_atomic_t agent_disconnect_flag;
 
-STATIC int agent_receive(int *sockfd, int *next_read_size){
+static int agent_receive(int *sockfd, int *next_read_size){
 	int retval = RET_OK;
 	Fragment fragment;
 	
@@ -36,7 +36,7 @@ STATIC int agent_receive(int *sockfd, int *next_read_size){
 	if (nbytes == -1){
 		if (errno != EAGAIN){				// EAGAIN means recv timed out
 			printf("ERROR recv");
-			retval = RET_ERROR;
+			retval = RET_FATAL_ERROR;
 		}
 	}
 	else if(nbytes == 0){
@@ -90,9 +90,9 @@ int agent_send(int *sockfd){
 		*value = htonl(*value);
 	}
 	
-	if (sendall(*sockfd, (void*)message->fragment, message->size) == RET_ERROR){
+	if (sendall(*sockfd, (void*)message->fragment, message->size) == RET_FATAL_ERROR){
 		printf("Send error\n");
-		return RET_ERROR;
+		return RET_FATAL_ERROR;
 	}
 	
 	free(message->fragment);

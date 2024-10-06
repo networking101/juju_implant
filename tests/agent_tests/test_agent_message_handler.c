@@ -128,7 +128,7 @@ static void test_parse_first_fragment_wrong_frame_index(void **state){
 	
 	int retval = parse_first_fragment(&q_message, &a_message);
 	
-	assert_int_equal(retval, RET_ERROR);
+	assert_int_equal(retval, RET_FATAL_ERROR);
 	assert_int_equal(a_message.last_fragment_index, -1);
 	
 	
@@ -145,7 +145,7 @@ static void test_parse_first_fragment_wrong_frame_index(void **state){
 	
 	retval = parse_first_fragment(&q_message, &a_message);
 	
-	assert_int_equal(retval, RET_ERROR);
+	assert_int_equal(retval, RET_FATAL_ERROR);
 	assert_int_equal(a_message.last_fragment_index, -1);
 
 	return;

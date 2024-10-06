@@ -84,7 +84,7 @@ int connect_to_listener(char* ip_addr, int port){
 
     if (ip_addr == NULL || !port){
         printf("Bad IP or port\n");
-        return RET_ERROR;
+        return RET_FATAL_ERROR;
     }
 
     addr.sin_family = AF_INET;
@@ -92,7 +92,7 @@ int connect_to_listener(char* ip_addr, int port){
 
     if (inet_pton(AF_INET, ip_addr, &addr.sin_addr) <= 0){
         printf("inet_pton failed\n");
-        return RET_ERROR;
+        return RET_FATAL_ERROR;
     }
 
     // keep trying to connect to listener
@@ -102,7 +102,7 @@ int connect_to_listener(char* ip_addr, int port){
 
         if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
             printf("socket failed\n");
-            return RET_ERROR;
+            return RET_FATAL_ERROR;
         }
 
         tv.tv_sec = S_TIMEOUT;
@@ -110,7 +110,7 @@ int connect_to_listener(char* ip_addr, int port){
 
         if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv))){
             printf("setsockopt failed\n");
-            return RET_ERROR;
+            return RET_FATAL_ERROR;
         }
 
         if ((status = connect(sockfd, (struct sockaddr*)&addr, sizeof(addr))) < 0){

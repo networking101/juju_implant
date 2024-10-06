@@ -1,6 +1,7 @@
 CC				:= gcc
 INC				:=-I../../include -I../../include/agent
 SRC				:=$(wildcard ../*.c) $(wildcard *.c)
+LIB		 		:=../../libs/zlib-1.3.1/libz.a
 
 FLAGS			:=-lpthread -m32 -Wall
 

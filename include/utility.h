@@ -10,11 +10,11 @@
 #define ANSI_COLOR_CYAN    "\x1b[36m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
 
-#ifdef UNIT_TESTING
-#define STATIC
-#else
-#define STATIC static
-#endif /* UNIT_TESTING */
+// #ifdef UNIT_TESTING
+// #define static
+// #else
+// #define static static
+// #endif /* UNIT_TESTING */
 
 #ifdef DEBUG
 #define debug_print(fmt, ...) \
@@ -26,5 +26,11 @@
 
 #define print_out(fmt, ...) \
 	do { fprintf(stdout, "\n" fmt "\n>", __VA_ARGS__); fflush(stdout); } while (0)
+
+int sendall(int, char*, int);
+
+int writeall(FILE*, char*, int);
+
+int check_directory(char*, int);
 
 #endif /* _UTILITY_H */

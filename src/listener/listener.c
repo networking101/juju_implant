@@ -103,13 +103,13 @@ int start_sockets(Connected_Agents* CA, int port){
     if ((listener_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0){
         printf("Socket failed\n");
         all_sigint = true;
-        return RET_ERROR;
+        return RET_FATAL_ERROR;
     }
 
     if (setsockopt(listener_socket, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))){
         printf("setsockopt failed\n");
         all_sigint = true;
-        return RET_ERROR;
+        return RET_FATAL_ERROR;
     }
 
     addr.sin_family = AF_INET;
@@ -119,13 +119,13 @@ int start_sockets(Connected_Agents* CA, int port){
     if (bind(listener_socket, (struct sockaddr*)&addr, sizeof(addr)) < 0){
         printf("bind failed\n");
         all_sigint = true;
-        return RET_ERROR;
+        return RET_FATAL_ERROR;
     }
 
     if (listen(listener_socket, LISTEN_BACKLOG) < 0){
         printf("listen failed\n");
         all_sigint = true;
-        return RET_ERROR;
+        return RET_FATAL_ERROR;
     }
 
     listener_pfd[0].fd = listener_socket;
@@ -136,7 +136,7 @@ int start_sockets(Connected_Agents* CA, int port){
         if (poll_count == -1 && errno != EINTR){
             printf("ERROR poll\n");
             all_sigint = true;
-            return RET_ERROR;
+            return RET_FATAL_ERROR;
 	    }
 
         if (poll_count > 0 && listener_pfd[0].revents & POLLIN){
@@ -181,10 +181,10 @@ int main(int argc, char *argv[]){
                 return RET_OK;
             case '?':
                 printf("Unknown argument %c\n", optopt);
-                return RET_ERROR;
+                return RET_FATAL_ERROR;
             case ':':
                 printf("Missing argument %c\n", optopt);
-                return RET_ERROR;
+                return RET_FATAL_ERROR;
         }
     }
     
@@ -193,7 +193,7 @@ int main(int argc, char *argv[]){
     sa.sa_flags = 0;
     if (sigaction(SIGINT, &sa, NULL) == -1){
         printf("ERROR sigaction SIGINT\n");
-        return RET_ERROR;
+        return RET_FATAL_ERROR;
     }
 
     // Setup Connected_Agents struct

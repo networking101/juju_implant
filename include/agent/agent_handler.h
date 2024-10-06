@@ -13,6 +13,8 @@ typedef struct Assembled_Message{
 
 void *agent_handler_thread(void*);
 
-int agent_prepare_message(int, char*, int);
+void agent_prepare_response(int);
+
+void agent_prepare_message(int, char*, int);
 
 #endif /* _AGENT_MESSAGE_HANDLER_H */

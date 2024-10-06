@@ -15,12 +15,12 @@ int sendall(int fd, char *buf, int len){
 
     while(total < len) {
         n = send(fd, buf+total, bytesleft, 0);
-        if (n == RET_ERROR) { break; }
+        if (n == RET_FATAL_ERROR) { break; }
         total += n;
         bytesleft -= n;
     }
 
-    return (n == RET_ERROR) ? RET_ERROR : RET_OK;
+    return (n == RET_FATAL_ERROR) ? RET_FATAL_ERROR : RET_OK;
 }
 
 int writeall(FILE* fd, char *buf, int len){
@@ -28,14 +28,14 @@ int writeall(FILE* fd, char *buf, int len){
     int num, n;
 
     while(total < len) {
-        num = (len - total >= WRITE_SIZE) ? WRITE_SIZE: (len - total);
+        num = (len - total >= FILE_WRITE_SIZE) ? FILE_WRITE_SIZE: (len - total);
         n = fwrite(buf + total, num, 1, fd);
         if (n != 1) { break; }
         
         total += num;
     }
 
-    return (n == RET_ERROR) ? RET_ERROR : RET_OK;
+    return (n == RET_FATAL_ERROR) ? RET_FATAL_ERROR : RET_OK;
 }
 
 int check_directory(char* pathname, int len){
@@ -45,7 +45,7 @@ int check_directory(char* pathname, int len){
     char* directory_path;
 
     if (pathname == NULL){
-        return RET_ERROR;
+        return RET_FATAL_ERROR;
     }
 
     directory_path = malloc(len);
@@ -65,5 +65,5 @@ int check_directory(char* pathname, int len){
         return RET_OK;
     }
 
-    return RET_ERROR;
+    return RET_FATAL_ERROR;
 }

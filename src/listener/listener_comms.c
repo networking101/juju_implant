@@ -33,7 +33,7 @@ extern pthread_mutex_t listener_send_queue_lock;
 // SIGINT flag
 extern volatile sig_atomic_t all_sigint;
 
-STATIC int listener_receive(Connected_Agents* CA){
+static int listener_receive(Connected_Agents* CA){
 	Fragment fragment;
 	int poll_count;
 	
@@ -42,7 +42,7 @@ STATIC int listener_receive(Connected_Agents* CA){
 	poll_count = poll(pfds, CA->nfds, MS_TIMEOUT);
 	if (poll_count == -1){
 		printf("ERROR poll\n");
-		return RET_ERROR;
+		return RET_FATAL_ERROR;
 	}
 	else if (poll_count > 0){
 		pthread_mutex_lock(&CA->lock);
@@ -60,7 +60,7 @@ STATIC int listener_receive(Connected_Agents* CA){
 				else if (nbytes == -1){
 					printf("ERROR recv error\n");
 					pthread_mutex_unlock(&CA->lock);
-					return RET_ERROR;
+					return RET_FATAL_ERROR;
 				}
 				else{
 					// Convert each value of header to host order
@@ -96,7 +96,7 @@ STATIC int listener_receive(Connected_Agents* CA){
     return RET_OK;
 }
 
-STATIC int listener_send(){
+static int listener_send(){
 	Queue_Message* message;
 	Fragment* fragment;
 
@@ -116,9 +116,9 @@ STATIC int listener_send(){
 		*value = htonl(*value);
 	}
 	
-	if (sendall(message->id, (void*)message->fragment, message->size) == RET_ERROR){
+	if (sendall(message->id, (void*)message->fragment, message->size) == RET_FATAL_ERROR){
 		printf("Send error\n");
-		return RET_ERROR;
+		return RET_FATAL_ERROR;
 	}
 	
 	free(message->fragment);
