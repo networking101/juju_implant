@@ -39,7 +39,7 @@ extern volatile sig_atomic_t shell_flag;
 #define AGENT_MENU "Implant %d selected.\nProvide an option.\n1 - interactive shell\n2 - put file\n3 - get file\n4 - restart shell\n5 - stop agent\n6 - go back\n"
 
 static int restart_shell(int agent_fd){
-	char exit_str[] = "exit";
+	char exit_str[] = "exit\n";
 
 	listener_prepare_message(agent_fd, TYPE_COMMAND, exit_str, strlen(exit_str) + 1);
 

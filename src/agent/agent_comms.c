@@ -64,7 +64,11 @@ static int agent_receive(int *sockfd, int *next_read_size){
 		message->size = nbytes;
 		memcpy(message->fragment, &fragment, nbytes);
 		
-		enqueue(agent_receive_queue, &agent_receive_queue_lock, message);
+		pthread_mutex_lock(&agent_receive_queue_lock);
+		enqueue(agent_receive_queue, message);
+		pthread_mutex_unlock(&agent_receive_queue_lock);
+
+		memset(&fragment, 0, sizeof(fragment));
 	}
 
 	return retval;	
@@ -74,7 +78,10 @@ int agent_send(int *sockfd){
 	Queue_Message* message;
 	Fragment* fragment;
 
-	if (!(message = dequeue(agent_send_queue, &agent_send_queue_lock))) return RET_OK;
+	pthread_mutex_lock(&agent_send_queue_lock);
+	message = dequeue(agent_send_queue);
+	pthread_mutex_unlock(&agent_send_queue_lock);
+	if (!message) return RET_OK;
 
 	fragment = message->fragment;
 	

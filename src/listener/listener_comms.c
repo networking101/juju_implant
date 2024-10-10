@@ -85,8 +85,10 @@ static int listener_receive(Connected_Agents* CA){
 					message->size = nbytes;
 					memcpy(message->fragment, &fragment, nbytes);
 					
-					debug_print("adding message to queue: id: %d, size: %d\n", message->id, message->size);
-					enqueue(listener_receive_queue, &listener_receive_queue_lock, message);
+					pthread_mutex_lock(&listener_receive_queue_lock);
+					enqueue(listener_receive_queue, message);
+					pthread_mutex_unlock(&listener_receive_queue_lock);
+
 					memset(&fragment, 0, sizeof(fragment));
 				}
 			}
@@ -100,7 +102,11 @@ static int listener_send(){
 	Queue_Message* message;
 	Fragment* fragment;
 
-	if (!(message = dequeue(listener_send_queue, &listener_send_queue_lock))) return RET_OK;
+	pthread_mutex_lock(&listener_send_queue_lock);
+	message = dequeue(listener_send_queue);
+	pthread_mutex_unlock(&listener_send_queue_lock);
+
+	if (!message) return RET_OK;
 
 	fragment = message->fragment;
 

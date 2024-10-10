@@ -96,7 +96,12 @@ static int execute_shell(){
 		// if still running, dequeue messages and send to shell
 		// if child was killed, we need to start another child process
 		while (!(waitpid(pid, NULL, WNOHANG)) && !agent_close_flag && !agent_disconnect_flag){
-			if ((message = dequeue(shell_send_queue, &shell_send_queue_lock))){
+
+			pthread_mutex_lock(&shell_send_queue_lock);
+			message = dequeue(shell_send_queue);
+			pthread_mutex_unlock(&shell_send_queue_lock);
+
+			if (message){
 				debug_print("dequeued message for shell: %s, %d\n", message->buffer, message->size);
 				if ((nbytes = write(shell_pipes.pipes[STDIN].pipefd[PIPE_IN], message->buffer, message->size)) == -1){
 					printf("ERROR write to shell\n");

@@ -38,9 +38,9 @@ int isFull(Queue*);
 
 int isEmpty(Queue*);
 
-void enqueue(Queue*, pthread_mutex_t*, void*);
+void enqueue(Queue*, void*);
 
-void* dequeue(Queue*, pthread_mutex_t*);
+void* dequeue(Queue*);
 
 void* front(Queue*);
 

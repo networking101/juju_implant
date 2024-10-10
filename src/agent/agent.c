@@ -65,7 +65,9 @@ void *keep_alive(void *vargp){
             message->size = HEADER_SIZE;
             message->fragment = fragment;
 			
-			enqueue(agent_send_queue, &agent_send_queue_lock, message);
+            pthread_mutex_lock(&agent_send_queue_lock);
+			enqueue(agent_send_queue, message);
+            pthread_mutex_unlock(&agent_send_queue_lock);
 			
 			agent_alive_flag = false;
 			alarm(ALIVE_FREQUENCY);
