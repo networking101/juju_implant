@@ -14,7 +14,7 @@ all: ../bin/test
 debug: ../bin/test
 
 ../bin/test: test.c
-	$(CC) $(TEST_INC) $(LINK) -o ../bin/test $(TEST_SRC) $(FLAGS) $(LIB)
+	$(CC) $(TEST_INC) $(LINK) -o ../bin/test $(TEST_SRC) $(FLAGS)
 	
 .PHONY: clean
 clean:
