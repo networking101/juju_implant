@@ -197,10 +197,10 @@ int main(int argc, char *argv[]){
     }
 
     // Setup Connected_Agents struct
-    CA = calloc(1, sizeof(Connected_Agents));
+    if ((CA = calloc(1, sizeof(Connected_Agents))) == NULL) return RET_FATAL_ERROR;
     CA->nfds = FDSIZE;
-    CA->pfds = calloc(FDSIZE, sizeof(struct pollfd));
-    CA->agents = calloc(FDSIZE, sizeof(Agent));
+    if ((CA->pfds = calloc(FDSIZE, sizeof(struct pollfd))) == NULL) return RET_FATAL_ERROR;
+    if ((CA->agents = calloc(FDSIZE, sizeof(Agent))) == NULL) return RET_FATAL_ERROR;
     // create CA mutex
     pthread_mutex_init(&CA->lock, NULL);
 

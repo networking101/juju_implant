@@ -358,7 +358,7 @@ done:
 	return retval;
 }
 
-void listener_prepare_message(int sockfd, int type, char* message, int message_size){
+int listener_prepare_message(int sockfd, int type, char* message, int message_size){
 	Queue_Message* q_message;
 	Fragment* fragment;
 	int bytes_sent = 0, index = 0;
@@ -366,7 +366,7 @@ void listener_prepare_message(int sockfd, int type, char* message, int message_s
 	uint32_t crc = calculate_crc32c(0, (unsigned char*)message, message_size);
 
 	// prepare first fragment. Only purpose is to prepare for next fragment size
-	fragment = calloc(1, sizeof(Fragment));
+	if ((fragment = calloc(1, sizeof(Fragment))) == NULL) return RET_FATAL_ERROR;
 	fragment->header.type = type;
 	fragment->header.index = index++;
 	fragment->header.total_size = message_size;
@@ -375,7 +375,7 @@ void listener_prepare_message(int sockfd, int type, char* message, int message_s
 	next_size = message_size < PAYLOAD_SIZE ? message_size : PAYLOAD_SIZE;
 	fragment->header.next_size = next_size;
 	
-	q_message = malloc(sizeof(Queue_Message));
+	if ((q_message = malloc(sizeof(Queue_Message))) == NULL) return RET_FATAL_ERROR;
 	q_message->id = sockfd;
 	q_message->size = HEADER_SIZE;
 	q_message->fragment = fragment;
@@ -387,7 +387,7 @@ void listener_prepare_message(int sockfd, int type, char* message, int message_s
 		this_size = next_size;
 
 		// send remaining fragments
-		fragment = calloc(1, sizeof(Fragment));
+		if ((fragment = calloc(1, sizeof(Fragment))) == NULL) return RET_FATAL_ERROR;
 		fragment->header.type = type;
 		fragment->header.index = index++;
 		fragment->header.total_size = message_size;
@@ -397,7 +397,7 @@ void listener_prepare_message(int sockfd, int type, char* message, int message_s
 		fragment->header.next_size = next_size;
 		memcpy(fragment->buffer, message + bytes_sent, this_size);
 		
-		q_message = malloc(sizeof(Queue_Message));
+		if ((q_message = malloc(sizeof(Queue_Message))) == NULL) return RET_FATAL_ERROR;
 		q_message->id = sockfd;
 		q_message->size = HEADER_SIZE + this_size;
 		q_message->fragment = fragment;
@@ -405,7 +405,9 @@ void listener_prepare_message(int sockfd, int type, char* message, int message_s
 		enqueue(listener_send_queue, q_message);
 		bytes_sent += this_size;
 	}
+
 	pthread_mutex_unlock(&listener_send_queue_lock);
+	return RET_OK;
 }
 
 /* listener_handler_thread

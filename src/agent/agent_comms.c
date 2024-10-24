@@ -29,6 +29,7 @@ extern volatile sig_atomic_t agent_disconnect_flag;
 
 static int agent_receive(int *sockfd, int *next_read_size){
 	int retval = RET_OK;
+	Queue_Message* message;
 	Fragment fragment;
 	
 	// get first chunk which contains total message size
@@ -58,8 +59,8 @@ static int agent_receive(int *sockfd, int *next_read_size){
 
 		*next_read_size = fragment.header.next_size;
 
-		Queue_Message* message = malloc(sizeof(Queue_Message));
-		message->fragment = calloc(1, nbytes + 1);
+		if ((message = malloc(sizeof(Queue_Message))) == NULL) return RET_FATAL_ERROR;
+		if ((message->fragment = calloc(1, nbytes + 1)) == NULL) return RET_FATAL_ERROR;
 		message->id = -1;
 		message->size = nbytes;
 		memcpy(message->fragment, &fragment, nbytes);

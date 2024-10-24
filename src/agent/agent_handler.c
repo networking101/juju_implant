@@ -130,7 +130,10 @@ static int agent_handle_get_file_name(Assembled_Message* a_message){
 		// start at next character after last forward slash
 		slash_ptr++;
 		file_name_size = strlen(slash_ptr);
-		file_name_buffer = calloc(1, file_name_size + 1);
+		if ((file_name_buffer = calloc(1, file_name_size + 1)) == NULL){
+			retval = RET_FATAL_ERROR;
+			goto done_file_buf;
+		}
 		memcpy(file_name_buffer, slash_ptr, file_name_size);
 
 		debug_print("Get file: %s, size: %d\n", file_name_buffer, file_size);
@@ -451,16 +454,16 @@ ARGUMENTS
 	id	- the response id
 
 DONE */
-void agent_prepare_response(int id){
+int agent_prepare_response(int id){
 	Queue_Message* q_message;
 	Fragment* fragment;
 
 	// prepare first fragment. Only purpose is to prepare for next fragment size
-	fragment = calloc(1, sizeof(Fragment));
+	if ((fragment = calloc(1, sizeof(Fragment))) == NULL) return RET_FATAL_ERROR;
 	fragment->header.type = TYPE_RESPONSE;
 	fragment->header.response_id = id;
 	
-	q_message = malloc(sizeof(Queue_Message));
+	if ((q_message = malloc(sizeof(Queue_Message))) == NULL) return RET_FATAL_ERROR;
 	q_message->id = 0;
 	q_message->size = HEADER_SIZE;
 	q_message->fragment = fragment;
@@ -468,6 +471,8 @@ void agent_prepare_response(int id){
 	pthread_mutex_lock(&agent_send_queue_lock);
 	enqueue(agent_send_queue, q_message);
 	pthread_mutex_unlock(&agent_send_queue_lock);
+
+	return RET_OK;
 }
 
 /* agent_prepare_message
@@ -480,7 +485,7 @@ ARGUMENTS
 	m_size		- size of message in bytes
 
 HALFDONE */
-void agent_prepare_message(int type, char* message, int m_size){
+int agent_prepare_message(int type, char* message, int m_size){
 	Queue_Message* q_message;
 	Fragment* fragment;
 	int bytes_sent = 0, index = 0;
@@ -488,7 +493,7 @@ void agent_prepare_message(int type, char* message, int m_size){
 	uint32_t crc = calculate_crc32c(0, (unsigned char*)message, m_size);
 
 	// prepare first fragment. Only purpose is to prepare for next fragment size
-	fragment = calloc(1, sizeof(Fragment));
+	if ((fragment = calloc(1, sizeof(Fragment))) == NULL) return RET_FATAL_ERROR;
 	fragment->header.type = type;
 	fragment->header.index = index++;
 	fragment->header.total_size = m_size;
@@ -497,7 +502,7 @@ void agent_prepare_message(int type, char* message, int m_size){
 	next_size = m_size < PAYLOAD_SIZE ? m_size : PAYLOAD_SIZE;
 	fragment->header.next_size = next_size;
 	
-	q_message = malloc(sizeof(Queue_Message));
+	if ((q_message = malloc(sizeof(Queue_Message))) == NULL) return RET_FATAL_ERROR;
 	q_message->id = 0;
 	q_message->size = HEADER_SIZE;
 	q_message->fragment = fragment;
@@ -509,7 +514,7 @@ void agent_prepare_message(int type, char* message, int m_size){
 		this_size = next_size;
 
 		// send remaining fragments
-		fragment = calloc(1, sizeof(Fragment));
+		if ((fragment = calloc(1, sizeof(Fragment))) == NULL) return RET_FATAL_ERROR;
 		fragment->header.type = type;
 		fragment->header.index = index++;
 		fragment->header.total_size = m_size;
@@ -519,7 +524,7 @@ void agent_prepare_message(int type, char* message, int m_size){
 		fragment->header.next_size = next_size;
 		memcpy(fragment->buffer, message + bytes_sent, this_size);
 		
-		q_message = malloc(sizeof(Queue_Message));
+		if ((q_message = malloc(sizeof(Queue_Message))) == NULL) return RET_FATAL_ERROR;
 		q_message->id = 0;
 		q_message->size = HEADER_SIZE + this_size;
 		q_message->fragment = fragment;
@@ -529,6 +534,7 @@ void agent_prepare_message(int type, char* message, int m_size){
 	}
 
 	pthread_mutex_unlock(&agent_send_queue_lock);
+	return RET_OK;
 }
 
 /* agent_handler_thread

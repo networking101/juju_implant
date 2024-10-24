@@ -45,10 +45,10 @@ int check_directory(char* pathname, int len){
     char* directory_path;
 
     if (pathname == NULL){
-        return RET_FATAL_ERROR;
+        return RET_ERROR;
     }
 
-    directory_path = malloc(len);
+    if ((directory_path = malloc(len)) == NULL) return RET_FATAL_ERROR;
     memcpy(directory_path, pathname, len);
     slash_ptr = strrchr(directory_path, slash);
 

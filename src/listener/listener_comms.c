@@ -35,6 +35,7 @@ extern volatile sig_atomic_t all_sigint;
 
 static int listener_receive(Connected_Agents* CA){
 	Fragment fragment;
+	Queue_Message* message;
 	int poll_count;
 	
 	struct pollfd *pfds = CA->pfds;
@@ -79,8 +80,8 @@ static int listener_receive(Connected_Agents* CA){
 					CA->agents[pfds[i].fd].next_recv_size = fragment.header.next_size;
 					pthread_mutex_unlock(&CA->lock);
 					
-					Queue_Message* message = malloc(sizeof(Queue_Message));
-					message->fragment = calloc(1, nbytes + 1);
+					if ((message = malloc(sizeof(Queue_Message))) == NULL) return RET_FATAL_ERROR;
+					if ((message->fragment = calloc(1, nbytes + 1)) == NULL) return RET_FATAL_ERROR;
 					message->id = pfds[i].fd;
 					message->size = nbytes;
 					memcpy(message->fragment, &fragment, nbytes);

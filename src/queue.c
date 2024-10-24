@@ -5,6 +5,7 @@
 #include "utility.h"
 #include "queue.h"
 
+// TODO handle malloc return error
 Queue* createQueue(unsigned capacity){
 	Queue* queue = (Queue*)malloc(sizeof(Queue));
 	queue->capacity = capacity;

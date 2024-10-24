@@ -109,6 +109,7 @@ static int get_file_command(int agent_fd){
 }
 
 static int put_file_command(int agent_fd){
+	int retval = RET_OK;
 	char buf[PAYLOAD_SIZE];
 	FILE* file_fd;
 	int file_size, bytes_read;
@@ -117,47 +118,54 @@ static int put_file_command(int agent_fd){
 	print_out("%s", "Source file");
 	if (!fgets(buf, PAYLOAD_SIZE, stdin)){
 		printf("ERROR fgets\n");
-		return RET_FATAL_ERROR;
+		retval =  RET_FATAL_ERROR;
+		goto done;
 	}
 
 	// take newline off
 	buf[strcspn(buf, "\n")] = 0;
 
 	if (access(buf, F_OK) != 0){
-		printf("%s\n", buf);
 		printf("File doesn't exist\n");
-		return RET_OK;
+		retval = RET_OK;
+		goto done;
 	}
 
 	if ((file_fd = fopen(buf, "rb")) == 0){
-		printf("ERROR file open\n");
-		return RET_FATAL_ERROR;
+		printf("File access error\n");
+		retval = RET_OK;
+		goto done;
 	}
 
 	if (fseek(file_fd, 0L, SEEK_END) == -1){
 		printf("ERROR fseek\n");
-		return RET_FATAL_ERROR;
+		retval = RET_FATAL_ERROR;
+		goto done_fp;
 	}
 	if ((file_size = ftell(file_fd)) == -1){
 		printf("ERROR ftell\n");
-		return RET_FATAL_ERROR;
+		retval = RET_FATAL_ERROR;
+		goto done_fp;
 	}
 	rewind(file_fd);
 
-	file_buffer = malloc(file_size);
+	if ((file_buffer = malloc(file_size)) == NULL){
+		retval = RET_FATAL_ERROR;
+		goto done_fp;
+	}
 
 	bytes_read = fread(file_buffer, 1, file_size, file_fd);
 	if (bytes_read != file_size || ferror(file_fd)){
 		printf("ERROR fread\n");
-		return RET_FATAL_ERROR;
+		retval = RET_FATAL_ERROR;
+		goto done_alloc;
 	}
-	
-	fclose(file_fd);
 
 	print_out("%s", "Destination file (default is current directory)");
 	if (!fgets(buf, PAYLOAD_SIZE, stdin)){
 		printf("fgets error\n");
-		return RET_FATAL_ERROR;
+		retval = RET_FATAL_ERROR;
+		goto done_alloc;
 	}
 
 	// take newline off
@@ -168,7 +176,12 @@ static int put_file_command(int agent_fd){
 
 	debug_print("Put file: %s, size: %d\n", buf, file_size);
 
-	return RET_OK;
+done_alloc:
+	free(file_buffer);
+done_fp:
+	fclose(file_fd);
+done:
+	return retval;
 }
 
 static int agent_console(Agent* agent, int agent_fd){

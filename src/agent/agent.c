@@ -56,11 +56,17 @@ void *keep_alive(void *vargp){
 		if (agent_alive_flag){
 			debug_print("%s\n", "Sending alive packet");
 			
-			fragment = calloc(1, HEADER_SIZE);
+			if ((fragment = calloc(1, HEADER_SIZE)) == NULL){
+                agent_close_flag = true;
+                break;
+            }
             fragment->header.type = TYPE_ALIVE;
             fragment->header.alive_time = time(NULL) - start_time;
 			
-			message = malloc(sizeof(Queue_Message));
+			if ((message = malloc(sizeof(Queue_Message))) == NULL){
+                agent_close_flag = true;
+                break;
+            }
             message->id = 0;
             message->size = HEADER_SIZE;
             message->fragment = fragment;
@@ -153,6 +159,26 @@ int connect_to_listener(char* ip_addr, int port){
 int main(int argc, char** argv){
     char* ip_addr = "10.0.2.15";
     int port = 55555;
+
+#ifndef DEBUG
+    pid_t pid;
+    // Daemonize with double fork
+    // First fork
+    if ((pid = fork()) < 0) return RET_ERROR;
+
+    // If parent, terminate
+    if (pid > 0) return RET_OK;
+
+    // Child becomes session leader
+    if (setsid() < 0) return RET_ERROR;
+
+    // Second fork
+    if ((pid = fork()) < 0) return RET_ERROR;
+
+    // If parent, terminate
+    if (pid > 0) return RET_OK;
+    printf("JUJU daemonize done\n");
+#endif /* DEBUG */
     
     start_time = time(NULL);
     

