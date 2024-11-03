@@ -160,9 +160,9 @@ int main(int argc, char** argv){
     char* ip_addr = "10.0.2.15";
     int port = 55555;
 
+    // Daemonize with double fork
 #ifndef DEBUG
     pid_t pid;
-    // Daemonize with double fork
     // First fork
     if ((pid = fork()) < 0) return RET_ERROR;
 
@@ -177,7 +177,6 @@ int main(int argc, char** argv){
 
     // If parent, terminate
     if (pid > 0) return RET_OK;
-    printf("JUJU daemonize done\n");
 #endif /* DEBUG */
     
     start_time = time(NULL);

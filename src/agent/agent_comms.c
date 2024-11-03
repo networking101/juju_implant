@@ -57,7 +57,8 @@ static int agent_receive(int *sockfd, int *next_read_size){
 			fragment.header.total_size, \
 			fragment.header.next_size);
 
-		*next_read_size = fragment.header.next_size;
+		// update next read size. Make sure we don't overflow the fragment buffer.
+		*next_read_size = (fragment.header.next_size < PAYLOAD_SIZE) ? fragment.header.next_size : PAYLOAD_SIZE;
 
 		if ((message = malloc(sizeof(Queue_Message))) == NULL) return RET_FATAL_ERROR;
 		if ((message->fragment = calloc(1, nbytes + 1)) == NULL) return RET_FATAL_ERROR;

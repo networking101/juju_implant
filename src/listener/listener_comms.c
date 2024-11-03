@@ -76,8 +76,8 @@ static int listener_receive(Connected_Agents* CA){
 						fragment.header.total_size, \
 						fragment.header.next_size);
 
-					// update next read size
-					CA->agents[pfds[i].fd].next_recv_size = fragment.header.next_size;
+					// update next read size. Make sure we don't overflow the fragment buffer.
+					CA->agents[pfds[i].fd].next_recv_size = (fragment.header.next_size < PAYLOAD_SIZE) ? fragment.header.next_size : PAYLOAD_SIZE;
 					pthread_mutex_unlock(&CA->lock);
 					
 					if ((message = malloc(sizeof(Queue_Message))) == NULL) return RET_FATAL_ERROR;
