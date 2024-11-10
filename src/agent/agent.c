@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <signal.h>
 #include <errno.h>
+#include <sys/time.h>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -113,8 +114,8 @@ int connect_to_listener(char* ip_addr, int port){
             return RET_FATAL_ERROR;
         }
 
-        tv.tv_sec = S_TIMEOUT;
-        tv.tv_usec = 0;
+        tv.tv_sec = 0;
+        tv.tv_usec = TIMEOUT_CONST * 10000;     // .1 seconds
 
         if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv))){
             printf("setsockopt failed\n");

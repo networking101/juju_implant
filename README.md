@@ -20,9 +20,7 @@ make
 handle more than FDSIZE agents  
 encrypted comms  
 handle newlines from shell response fragments  
-when the agent is force closed, the console hangs  
-change base.c to utility_listener.c  
-handle all errors (malloc, calloc)  
 udp  
-Let SIGINT handle normally
 add colors to different message types  
+check if functions that aren't exported have static keyword  
+issue with removing agents from poll (break agent with gdb then list agent when removed)  

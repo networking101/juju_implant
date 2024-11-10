@@ -35,8 +35,7 @@
 // Timeouts
 #define AGENT_TIMEOUT		60				// 60 s
 #define ALIVE_FREQUENCY		10				// 10 s
-#define MS_TIMEOUT			1000			// 1000 ms
-#define S_TIMEOUT  			1				// 1 s
+#define TIMEOUT_CONST		1				// 1 s
 
 // Status messages
 typedef struct Status_Message{

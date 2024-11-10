@@ -36,7 +36,7 @@ static int agent_receive(int *sockfd, int *next_read_size){
 	int nbytes = recv(*sockfd, (void*)&fragment, HEADER_SIZE + *next_read_size, 0);
 	if (nbytes == -1){
 		if (errno != EAGAIN){				// EAGAIN means recv timed out
-			printf("ERROR recv");
+			printf("ERROR recv\n");
 			retval = RET_FATAL_ERROR;
 		}
 	}

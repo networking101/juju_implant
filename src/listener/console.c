@@ -15,11 +15,12 @@ It will pass commands to the message handler and receive responses from the mess
 #include <signal.h>
 #include <stdbool.h>
 #include <sys/types.h>
+#include <sys/time.h>
 
 #include "utility.h"
 #include "queue.h"
 #include "implant.h"
-#include "base.h"
+#include "listener_utility.h"
 #include "console.h"
 #include "listener_handler.h"
 
@@ -31,7 +32,7 @@ extern pthread_mutex_t listener_receive_queue_lock;
 extern Queue* listener_send_queue;
 extern pthread_mutex_t listener_send_queue_lock;
 // SIGINT flag
-extern volatile sig_atomic_t all_sigint;
+extern volatile sig_atomic_t listener_exit_flag;
 extern volatile sig_atomic_t shell_sigint;
 extern volatile sig_atomic_t shell_flag;
 
@@ -46,34 +47,33 @@ static int restart_shell(int agent_fd){
 	return RET_OK;
 }
 
-static int shell_console(int agent_fd){
+static int shell_console(Agent* agent, int agent_fd){
 	int retval;
 	char command_buf[PAYLOAD_SIZE];
     fd_set console_fds;
     struct timeval tv;
 
-	printf("Ctrl-c to leave shell running\nexit to restart shell");
+	printf("\"Ctrl-c\" to leave shell running\n\"exit\" to restart shell");
 	print_out("%s", "");
 
 	shell_flag = true;
-	while (!shell_sigint){
-
-		tv.tv_sec = S_TIMEOUT;
-		tv.tv_usec = 0;
+	while (!shell_sigint && agent->alive){
+		tv.tv_sec = 0;
+		tv.tv_usec = TIMEOUT_CONST * 100000;	// .1 seconds
 		FD_ZERO(&console_fds);
 		FD_SET(STDIN, &console_fds);
 
 		retval = select(STDIN + 1, &console_fds, NULL, NULL, &tv);
         if (retval == -1){
             printf("select error, shell_console\n");
-			all_sigint = true;
+			listener_exit_flag = true;
 			return RET_FATAL_ERROR;
         }
 		else if (FD_ISSET(STDIN, &console_fds)){
 			memset(command_buf, 0, PAYLOAD_SIZE);
 			if (!fgets(command_buf, PAYLOAD_SIZE, stdin)){
 				printf("fgets error\n");
-				all_sigint = true;
+				listener_exit_flag = true;
 				return RET_FATAL_ERROR;
 			}
 
@@ -193,29 +193,29 @@ static int agent_console(Agent* agent, int agent_fd){
 
 	print_out(AGENT_MENU, agent_fd);
 				 
-	while(!all_sigint && agent->alive){
-		tv.tv_sec = S_TIMEOUT;
-    	tv.tv_usec = 0;
+	while(!listener_exit_flag && agent->alive){
+		tv.tv_sec = 0;
+    	tv.tv_usec = TIMEOUT_CONST * 100000;	// .1 seconds
     	FD_ZERO(&console_fds);
     	FD_SET(STDIN, &console_fds);
 
 		retval = select(STDIN + 1, &console_fds, NULL, NULL, &tv);
         if (retval == -1){
             printf("select error, agent_console\n");
-			all_sigint = true;
+			listener_exit_flag = true;
 			return RET_FATAL_ERROR;
         }
 		else if (FD_ISSET(STDIN, &console_fds)){
 			if (!fgets(opt_buf, PAYLOAD_SIZE, stdin)){
 				printf("fgets error\n");
-				all_sigint = true;
+				listener_exit_flag = true;
 				return RET_FATAL_ERROR;
 			}
 			option = strtol(opt_buf, NULL, 10);
 			switch(option){
 				case 1:
 					// console
-					if (shell_console(agent_fd) != RET_OK){
+					if (shell_console(agent, agent_fd) != RET_OK){
 						return RET_FATAL_ERROR;
 					}
 					break;
@@ -273,30 +273,30 @@ void *console_thread(void *vargp){
 	printf("\nWelcome to the implant listener.");
 	
 	print_out("%s", MENU);
-	while(!all_sigint){
+	while(!listener_exit_flag){
 		
-		tv.tv_sec = S_TIMEOUT;
-    	tv.tv_usec = 0;
+		tv.tv_sec = 0;
+    	tv.tv_usec = TIMEOUT_CONST * 100000;	// .1 seconds
     	FD_ZERO(&console_fds);
     	FD_SET(STDIN, &console_fds);
 
 		retval = select(STDIN + 1, &console_fds, NULL, NULL, &tv);
         if (retval == -1){
             printf("select error, console_thread\n");
-			all_sigint = true;
+			listener_exit_flag = true;
 			break;
         }
 		else if (FD_ISSET(STDIN, &console_fds)){
 			if (!fgets(buffer, PAYLOAD_SIZE, stdin)){
 				printf("fgets error\n");
-				all_sigint = true;
+				listener_exit_flag = true;
 				break;
 			}
 
 			option = strtol(buffer, NULL, 10);
 			switch(option){
 				case 9:
-					all_sigint = true;
+					listener_exit_flag = true;
 					printf("Goodbye\n");
 					break;
 				case 1:
@@ -323,7 +323,7 @@ void *console_thread(void *vargp){
 					printf("Unknown option selected\n");
 					break;
 			}
-			if (all_sigint) break;
+			if (listener_exit_flag) break;
 			print_out("%s", MENU);
         }
 	}

@@ -24,7 +24,7 @@ This file is responsible for the following:
 #include "utility.h"
 #include "queue.h"
 #include "implant.h"
-#include "base.h"
+#include "listener_utility.h"
 #include "listener_handler.h"
 
 // Globals
@@ -35,7 +35,7 @@ extern pthread_mutex_t listener_receive_queue_lock;
 extern Queue* listener_send_queue;
 extern pthread_mutex_t listener_send_queue_lock;
 // SIGINT flag
-extern volatile sig_atomic_t all_sigint;
+extern volatile sig_atomic_t listener_exit_flag;
 extern volatile sig_atomic_t shell_sigint;
 
 // Status messages
@@ -423,10 +423,10 @@ DONE */
 void *listener_handler_thread(void *vargp){
 	Connected_Agents* CA = vargp;
 
-	while(!all_sigint){
+	while(!listener_exit_flag){
 		if (listener_handle_message(CA) == RET_FATAL_ERROR){
 			printf("ERROR listener_handler_thread\n");
-			all_sigint = true;
+			listener_exit_flag = true;
 		}
 	}
 

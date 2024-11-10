@@ -20,7 +20,7 @@ This function will send and receive buffers to the agents.
 #include "utility.h"
 #include "queue.h"
 #include "implant.h"
-#include "base.h"
+#include "listener_utility.h"
 #include "listener_comms.h"
 
 // Global variables
@@ -31,7 +31,7 @@ extern pthread_mutex_t listener_receive_queue_lock;
 extern Queue* listener_send_queue;
 extern pthread_mutex_t listener_send_queue_lock;
 // SIGINT flag
-extern volatile sig_atomic_t all_sigint;
+extern volatile sig_atomic_t listener_exit_flag;
 
 static int listener_receive(Connected_Agents* CA){
 	Fragment fragment;
@@ -40,7 +40,7 @@ static int listener_receive(Connected_Agents* CA){
 	
 	struct pollfd *pfds = CA->pfds;
 	
-	poll_count = poll(pfds, CA->nfds, MS_TIMEOUT);
+	poll_count = poll(pfds, CA->nfds, TIMEOUT_CONST * 100);		// .1 seconds
 	if (poll_count == -1){
 		printf("ERROR poll\n");
 		return RET_FATAL_ERROR;
@@ -59,7 +59,7 @@ static int listener_receive(Connected_Agents* CA){
 					pthread_mutex_unlock(&CA->lock);
 				}
 				else if (nbytes == -1){
-					printf("ERROR recv error\n");
+					printf("ERROR recv\n");
 					pthread_mutex_unlock(&CA->lock);
 					return RET_FATAL_ERROR;
 				}
@@ -136,9 +136,9 @@ static int listener_send(){
 void *listener_receive_thread(void *vargp){
 	Connected_Agents* CA = vargp;
 
-	while(!all_sigint){
+	while(!listener_exit_flag){
 		if (listener_receive(CA) != RET_OK){
-			all_sigint = true;
+			listener_exit_flag = true;
 			printf("listener_receive_thread error\n");
 		}
 	}
@@ -149,9 +149,9 @@ void *listener_receive_thread(void *vargp){
 void *listener_send_thread(void *vargp){
 	Connected_Agents* CA = vargp;
 
-	while(!all_sigint){
+	while(!listener_exit_flag){
 		if (listener_send(CA) != RET_OK){
-			all_sigint = true;
+			listener_exit_flag = true;
 			printf("listener_send_thread error\n");
 		}
 	}

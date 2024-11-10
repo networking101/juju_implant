@@ -1,5 +1,5 @@
-#ifndef _BASE_H
-#define _BASE_H
+#ifndef _LISTENER_UTILITY_H
+#define _LISTENER_UTILITY_H
 
 #include "implant.h"
 
@@ -27,5 +27,5 @@ int agent_add(Connected_Agents*, int);
 
 int agent_delete(Connected_Agents*, int);
 
-#endif /* _BASE_H */
+#endif /* _LISTENER_UTILITY_H */
 
