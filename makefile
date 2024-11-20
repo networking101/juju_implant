@@ -1,6 +1,6 @@
 all:
-	$(MAKE) -C src/agent
-	$(MAKE) -C src/listener
+	$(MAKE) -C agent
+	$(MAKE) -C listener
 	$(MAKE) -C tests
 
 debug:
