@@ -3,18 +3,21 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <setjmp.h>
+#include <string.h>
 #include <cmocka.h>
 
-#include <string.h>
-
-#include "queue.h"
 #include "agent_handler.h"
 
 
+static void test(void **state) {
+    (void) state; /* unused */
+}
+
+
 int test_agent_handler(){
-	// const struct CMUnitTest tests[] = {
-	// 	cmocka_unit_test(test_parse_first_fragment_short_message),
-	// };
+	const struct CMUnitTest tests[] = {
+		cmocka_unit_test(test),
+	};
 	
-	// return cmocka_run_group_tests(tests, NULL, NULL);
+	return cmocka_run_group_tests(tests, NULL, NULL);
 }

@@ -1,20 +1,22 @@
+BUILD_DIR	:= build
+
 all:
 	$(MAKE) -C agent
 	$(MAKE) -C listener
 	$(MAKE) -C tests
 
 debug:
-	$(MAKE) -C src/agent debug
-	$(MAKE) -C src/listener debug
+	$(MAKE) -C agent debug
+	$(MAKE) -C listener debug
 	
 
 .PHONY: test
-test: bin/test
-	./bin/test
+test: $(BUILD_DIR)/test
+	./$(BUILD_DIR)/test
 
 .PHONY: clean
 clean:
-	rm -f $(ODIR)/*.o bin/listener bin/agent bin/test
+	rm -r $(BUILD_DIR)
 
 
 
